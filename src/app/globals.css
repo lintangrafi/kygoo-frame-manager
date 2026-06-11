@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --color-cream: #FBF7F0;
+  --color-espresso: #2D1810;
+  --color-amber: #D4872B;
+  --color-amber-glow: #F5A623;
+  --color-mahogany: #5C2D1A;
+  --color-warm-paper: #F5F0E8;
+  --color-cacao: #8B6914;
+  --color-golden-haze: rgba(212, 135, 43, 0.08);
+  --color-cream-card: #FEFAF3;
+}
+
+@theme inline {
+  --color-cream: var(--color-cream);
+  --color-espresso: var(--color-espresso);
+  --color-amber: var(--color-amber);
+  --color-amber-glow: var(--color-amber-glow);
+  --color-mahogany: var(--color-mahogany);
+  --color-warm-paper: var(--color-warm-paper);
+  --color-cacao: var(--color-cacao);
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-display: 'Playfair Display', serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-cream);
+  color: var(--color-espresso);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Warm grain texture on dark surfaces */
+.grain-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Film strip perforation on card edges */
+.film-strip {
+  position: relative;
+}
+
+.film-strip::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 6px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 12px,
+    var(--color-cream) 12px,
+    var(--color-cream) 16px
+  );
+  border-radius: 4px 0 0 4px;
+  z-index: 1;
+}
+
+/* Golden divider */
+.golden-divider {
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-amber) 20%,
+    var(--color-amber-glow) 50%,
+    var(--color-amber) 80%,
+    transparent 100%
+  );
+  border: none;
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.3); opacity: 0.3; }
+  50% { transform: scale(1.2); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes checkmark-draw {
+  0% { stroke-dashoffset: 100; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes subtle-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes icon-spin-once {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.2); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.checkmark-path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+.checkmark-path.draw {
+  animation: checkmark-draw 0.5s ease-out forwards;
+}
+
+.hover-spin {
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.group:hover .hover-spin {
+  transform: rotate(15deg) scale(1.1);
+}
