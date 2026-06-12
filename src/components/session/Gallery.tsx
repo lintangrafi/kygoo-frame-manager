@@ -52,6 +52,10 @@ export function Gallery({ sessionId, slug, status }: GalleryProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ frameId }),
     });
+    if (!res.ok) {
+      alert("Gagal memilih frame. Silakan coba lagi.");
+      return;
+    }
     const comp = await res.json();
     router.push(`/s/${slug}/editor/${comp.id}`);
   }

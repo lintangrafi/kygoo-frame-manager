@@ -6,9 +6,6 @@ import { getStaffSession } from "@/lib/auth/get-session";
 import { saveFile } from "@/lib/upload";
 
 export async function GET() {
-  const staff = await getStaffSession();
-  if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const allFrames = await db.select().from(frames).orderBy(frames.createdAt);
   return NextResponse.json(allFrames);
 }
