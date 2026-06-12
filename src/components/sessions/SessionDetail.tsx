@@ -27,6 +27,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   const [approving, setApproving] = useState<string | null>(null);
   const [justApproved, setJustApproved] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = () => {
@@ -53,19 +54,24 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
     if (!files || files.length === 0) return;
 
     setUploading(true);
-    for (let i = 0; i < files.length; i++) {
-      const formData = new FormData();
-      formData.append("file", files[i]);
+    setUploadProgress({ current: 0, total: files.length });
 
-      await fetch(`/api/sessions/${sessionId}/photos`, {
+    const uploadPromises = Array.from(files).map((file, idx) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return fetch(`/api/sessions/${sessionId}/photos`, {
         method: "POST",
         body: formData,
+      }).then(() => {
+        setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
       });
-    }
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    });
 
-    // Refresh compositions — photo baru mungkin belum dialokasikan
+    await Promise.all(uploadPromises);
+
+    setUploading(false);
+    setUploadProgress({ current: 0, total: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = "";
     fetchData();
   }
 
@@ -127,32 +133,43 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         </div>
         <div className="flex gap-2">
           {/* Upload foto */}
-          <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all duration-200 ${
-            uploading
-              ? "bg-cream text-mahogany/30"
-              : "bg-cream border border-amber/10 text-mahogany hover:border-amber/20 hover:bg-warm-paper"
-          }`}>
-            {uploading ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-mahogany/20 border-t-mahogany rounded-full animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-3.5 h-3.5" />
-                Upload Foto
-              </>
+          <div className="relative">
+            <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all duration-200 ${
+              uploading
+                ? "bg-cream text-mahogany/30 pointer-events-none"
+                : "bg-cream border border-amber/10 text-mahogany hover:border-amber/20 hover:bg-warm-paper"
+            }`}>
+              {uploading ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-amber/30 border-t-amber rounded-full animate-spin" />
+                  Upload {uploadProgress.current}/{uploadProgress.total}
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload Foto
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleUploadPhotos}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+            {/* Progress bar */}
+            {uploading && uploadProgress.total > 0 && (
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-cream rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                />
+              </div>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleUploadPhotos}
-              disabled={uploading}
-              className="hidden"
-            />
-          </label>
+          </div>
 
           {session.status === "draft" && (
             <button
