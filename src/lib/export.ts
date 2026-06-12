@@ -34,12 +34,7 @@ export async function composeFrame(
 
   const layers: sharp.OverlayOptions[] = [];
 
-  layers.push({
-    input: frameBuffer,
-    top: 0,
-    left: 0,
-  });
-
+  // Layer 1..N: Photos (di belakang — akan terlihat melalui area transparan frame)
   for (const alloc of allocations) {
     const photoPath = getUploadPath(alloc.photoPath);
     const photoBuffer = await readFile(photoPath);
@@ -69,6 +64,13 @@ export async function composeFrame(
       left: Math.max(0, left),
     });
   }
+
+  // Layer terakhir: Frame (di atas — area transparan frame akan memperlihatkan foto)
+  layers.push({
+    input: frameBuffer,
+    top: 0,
+    left: 0,
+  });
 
   return sharp({
     create: {

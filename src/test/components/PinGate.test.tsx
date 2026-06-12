@@ -3,11 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PinGate } from "@/components/session/PinGate";
 
-const mockRefresh = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mockRefresh }),
-}));
+const mockOnSuccess = vi.fn();
 
 vi.mock("@/lib/confetti", () => ({
   burstConfetti: vi.fn(),
@@ -20,8 +16,7 @@ describe("PinGate", () => {
   });
 
   it("renders the PIN entry form", () => {
-    render(<PinGate slug="ABC-2026-001" />);
-
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     expect(screen.getByText("Kygoo")).toBeInTheDocument();
     expect(screen.getByText("Frame Studio")).toBeInTheDocument();
     expect(screen.getByText(/Masukkan PIN Anda/)).toBeInTheDocument();
@@ -30,18 +25,18 @@ describe("PinGate", () => {
   });
 
   it("shows session slug in the info section", () => {
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     expect(screen.getByText("ABC-2026-001")).toBeInTheDocument();
   });
 
   it("button is disabled when PIN is less than 4 digits", () => {
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const button = screen.getByRole("button", { name: /Lihat Foto/ });
     expect(button).toBeDisabled();
   });
 
   it("button becomes enabled when PIN reaches 4 digits", async () => {
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const input = screen.getByPlaceholderText("4-digit PIN");
     const button = screen.getByRole("button", { name: /Lihat Foto/ });
 
@@ -50,7 +45,7 @@ describe("PinGate", () => {
   });
 
   it("filters non-numeric characters from PIN input", async () => {
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const input = screen.getByPlaceholderText("4-digit PIN");
 
     await userEvent.type(input, "a1b2c3d4");
@@ -58,7 +53,7 @@ describe("PinGate", () => {
   });
 
   it("limits PIN to 4 characters", async () => {
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const input = screen.getByPlaceholderText("4-digit PIN");
 
     await userEvent.type(input, "12345");
@@ -71,7 +66,7 @@ describe("PinGate", () => {
       json: () => Promise.resolve({ error: "PIN salah" }),
     });
 
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const input = screen.getByPlaceholderText("4-digit PIN");
     const button = screen.getByRole("button", { name: /Lihat Foto/ });
 
@@ -83,13 +78,20 @@ describe("PinGate", () => {
     });
   });
 
-  it("calls router.refresh on successful verification", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ success: true }),
-    });
+  it("calls onSuccess after successful verification", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, sessionId: "s1", customerName: "Test", status: "active" }),
+      })
+      .mockResolvedValueOnce({
+        json: () => Promise.resolve([{ id: "s1" }]),
+      })
+      .mockResolvedValueOnce({
+        json: () => Promise.resolve([]),
+      });
 
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const input = screen.getByPlaceholderText("4-digit PIN");
     const button = screen.getByRole("button", { name: /Lihat Foto/ });
 
@@ -97,7 +99,12 @@ describe("PinGate", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(mockRefresh).toHaveBeenCalled();
+      expect(mockOnSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerName: "Test",
+          status: "active",
+        })
+      );
     });
   });
 
@@ -106,7 +113,7 @@ describe("PinGate", () => {
       () => new Promise((resolve) => setTimeout(() => resolve({ ok: true, json: () => Promise.resolve({}) }), 100))
     );
 
-    render(<PinGate slug="ABC-2026-001" />);
+    render(<PinGate slug="ABC-2026-001" onSuccess={mockOnSuccess} />);
     const input = screen.getByPlaceholderText("4-digit PIN");
 
     await userEvent.type(input, "1234");

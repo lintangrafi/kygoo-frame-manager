@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { burstConfetti } from "@/lib/confetti";
 
-export function PinGate({ slug }: { slug: string }) {
-  const router = useRouter();
+interface PinGateProps {
+  slug: string;
+  onSuccess: (info: {
+    sessionId: string;
+    customerName: string;
+    status: string;
+    photoCount: number;
+  }) => void;
+}
+
+export function PinGate({ slug, onSuccess }: PinGateProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
@@ -29,27 +37,43 @@ export function PinGate({ slug }: { slug: string }) {
       return;
     }
 
+    const data = await res.json();
+
+    // Ambil jumlah foto
+    const photoRes = await fetch(`/api/sessions?slug=${slug}`);
+    const sessions = await photoRes.json();
+    let photoCount = 0;
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      const sessionId = sessions[0].id;
+      const photosRes = await fetch(`/api/sessions/${sessionId}/photos`);
+      const photos = await photosRes.json();
+      photoCount = Array.isArray(photos) ? photos.length : 0;
+    }
+
     if (cardRef.current) burstConfetti(cardRef.current);
-    setTimeout(() => router.refresh(), 400);
+
+    setTimeout(() => {
+      onSuccess({
+        sessionId: data.sessionId || sessions[0]?.id,
+        customerName: data.customerName,
+        status: data.status || "active",
+        photoCount,
+      });
+    }, 400);
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
-      {/* Decorative film strip top */}
       <div className="flex gap-3 mb-10 opacity-40">
         {[...Array(5)].map((_, i) => (
           <div
             key={i}
             className="w-16 h-16 rounded-md border-2 border-amber/40 bg-cream-card shadow-sm transition-transform duration-300 hover:scale-110 hover:opacity-80"
-            style={{
-              transform: `rotate(${(i - 2) * 3}deg)`,
-              animationDelay: `${i * 0.1}s`,
-            }}
+            style={{ transform: `rotate(${(i - 2) * 3}deg)` }}
           />
         ))}
       </div>
 
-      {/* Main card */}
       <div
         ref={cardRef}
         className="film-strip bg-cream-card border border-amber/20 rounded-2xl p-10 w-full max-w-md shadow-2xl shadow-amber/10 relative overflow-hidden"
@@ -77,7 +101,6 @@ export function PinGate({ slug }: { slug: string }) {
             </p>
           </div>
 
-          {/* PIN Display info */}
           <div className="bg-cream rounded-xl px-4 py-3 text-xs">
             <span className="font-semibold text-mahogany/70">Sesi: </span>
             <code className="bg-warm-paper px-2 py-0.5 rounded text-amber font-bold tracking-wider">
