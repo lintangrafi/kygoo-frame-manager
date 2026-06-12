@@ -32,8 +32,12 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
       fetch(`/api/sessions/${sessionId}`).then(r => r.json()),
       fetch(`/api/sessions/${sessionId}/compositions`).then(r => r.json()),
     ]).then(([s, c]) => {
-      setSession(s);
-      setCompositions(c);
+      setSession(s && !s.error ? s : null);
+      setCompositions(Array.isArray(c) ? c : []);
+      setLoading(false);
+    }).catch(() => {
+      setSession(null);
+      setCompositions([]);
       setLoading(false);
     });
   }, [sessionId]);
