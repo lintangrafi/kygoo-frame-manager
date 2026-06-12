@@ -5,7 +5,7 @@ export const customerSessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET || "complex_password_at_least_32_characters_long",
   cookieName: "kygoo_customer_session",
   cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
   },
 };
 
