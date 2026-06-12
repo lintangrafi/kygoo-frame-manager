@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { frames } from "@/db/schema";
+import { frames, frameSlots } from "@/db/schema";
 import { getStaffSession } from "@/lib/auth/get-session";
 import { saveFile } from "@/lib/upload";
 
@@ -38,6 +37,20 @@ export async function POST(req: NextRequest) {
     dimensionsH: metadata.height || 1800,
     additionalFee,
   }).returning();
+
+  const dimW = frame.dimensionsW;
+  const dimH = frame.dimensionsH;
+
+  // Auto-create 1 slot default yang menutupi seluruh area frame
+  await db.insert(frameSlots).values({
+    frameId: frame.id,
+    slotNumber: 1,
+    x: "0",
+    y: "0",
+    width: String(dimW),
+    height: String(dimH),
+    rotation: "0",
+  });
 
   return NextResponse.json(frame);
 }

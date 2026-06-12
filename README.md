@@ -89,8 +89,53 @@ Create `.env.local`:
 ```env
 DATABASE_URL=postgresql://user:password@host:5432/kygoo_frame_studio
 SESSION_SECRET=random-32-character-secret-string-here
-UPLOAD_DIR=./uploads
+UPLOAD_DIR=./public/uploads
 ```
+
+## Docker / Coolify Deployment
+
+### Volume Mount (Required)
+
+Pastikan direktori upload dipersistenkan dengan volume mount. Tanpa ini, semua file upload akan hilang setiap kali container di-rebuild.
+
+**docker-compose.yaml:**
+```yaml
+services:
+  kygoo-frame-studio:
+    image: kygoo-frame-studio
+    environment:
+      DATABASE_URL: postgresql://kygoo_fs_user:password@kygoo-frame-studio-db:5432/kygoo_frame_studio
+      UPLOAD_DIR: ./public/uploads
+      SESSION_SECRET: <random-32-char-string>
+      COOKIE_SECURE: "false"
+    volumes:
+      - kygoo-uploads:/app/public/uploads
+
+volumes:
+  kygoo-uploads:
+```
+
+**Coolify setup:**
+1. Buka service di Coolify dashboard
+2. Tab "Storages" → Add Persistent Storage
+3. Isi:
+   - Source Path: `/app/public/uploads`
+   - Destination Name: `kygoo-uploads`
+4. Deploy ulang service
+
+### Seed Slots (pasca deploy)
+Setelah deploy, jalankan script untuk memastikan semua frame punya slot:
+```bash
+# Di container Coolify
+cd /app && npx tsx src/db/seed-slots.ts
+```
+
+### Fix Missing Files (Recovery)
+Jika file foto hilang setelah rebuild container:
+1. Staff buka session detail
+2. Photo akan muncul dengan `fileExists: false`
+3. Upload ulang file dengan menambahkan field `photoId` di form upload
+4. Atau bisa via API: `POST /api/sessions/<id>/photos` dengan form-data `file` + `photoId`
 
 ## Scripts
 
@@ -157,7 +202,7 @@ Deploy this Next.js 16 application to a production server.
    ```env
    DATABASE_URL=postgresql://user:password@localhost:5432/kygoo_frame_studio
    SESSION_SECRET=<generate-32-char-random-string>
-   UPLOAD_DIR=./uploads
+   UPLOAD_DIR=./public/uploads
    ```
 
 5. **Push database schema and seed**
@@ -175,7 +220,7 @@ Deploy this Next.js 16 application to a production server.
 
 7. **Create upload directories**
    ```bash
-   mkdir -p uploads/frames uploads/sessions uploads/exports
+   mkdir -p public/uploads/frames public/uploads/sessions public/uploads/exports
    ```
 
 8. **Start the server**

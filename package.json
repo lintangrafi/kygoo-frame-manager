@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:seed": "npx tsx src/db/seed.ts"
+    "db:seed": "npx tsx src/db/seed.ts",
+    "db:seed-slots": "npx tsx src/db/seed-slots.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -6,7 +6,7 @@ import { composeFrame } from "@/lib/export";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
-const EXPORT_DIR = process.env.UPLOAD_DIR ? join(process.env.UPLOAD_DIR, "exports") : "./public/uploads/exports";
+const EXPORT_DIR = join("./public/uploads", "exports");
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: compId } = await params;

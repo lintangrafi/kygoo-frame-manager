@@ -27,10 +27,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: sessionId } = await params;
 
-  // Hanya customer yang bisa membuat composition
   const customer = await getCurrentCustomer();
-  if (!customer || customer.sessionId !== sessionId || customer.status === "completed") {
-    return NextResponse.json({ error: "Unauthorized atau sesi sudah selesai" }, { status: 401 });
+  const staff = await getStaffSession();
+
+  // Customer: harus login sebagai customer session yang sesuai
+  if (customer) {
+    if (customer.sessionId !== sessionId || customer.status === "completed") {
+      return NextResponse.json({ error: "Sesi sudah selesai atau tidak sesuai" }, { status: 401 });
+    }
+  } else if (!staff) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { frameId } = await req.json();
