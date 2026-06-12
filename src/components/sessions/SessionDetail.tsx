@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { CheckCircle, Download, Clock, Hash, Sparkles } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { CheckCircle, Download, Clock, Hash, Sparkles, Upload, Image } from "lucide-react";
 
 interface Session {
   id: string;
@@ -26,17 +26,54 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
   const [justApproved, setJustApproved] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const fetchData = () => {
     Promise.all([
       fetch(`/api/sessions/${sessionId}`).then(r => r.json()),
       fetch(`/api/sessions/${sessionId}/compositions`).then(r => r.json()),
     ]).then(([s, c]) => {
-      setSession(s);
-      setCompositions(c);
+      setSession(s && !s.error ? s : null);
+      setCompositions(Array.isArray(c) ? c : []);
+      setLoading(false);
+    }).catch(() => {
+      setSession(null);
+      setCompositions([]);
       setLoading(false);
     });
+  };
+
+  useEffect(() => {
+    fetchData();
   }, [sessionId]);
+
+  async function handleUploadPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    setUploadProgress({ current: 0, total: files.length });
+
+    const uploadPromises = Array.from(files).map((file, idx) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return fetch(`/api/sessions/${sessionId}/photos`, {
+        method: "POST",
+        body: formData,
+      }).then(() => {
+        setUploadProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      });
+    });
+
+    await Promise.all(uploadPromises);
+
+    setUploading(false);
+    setUploadProgress({ current: 0, total: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    fetchData();
+  }
 
   async function activate() {
     await fetch(`/api/sessions/${sessionId}`, {
@@ -71,7 +108,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   return (
     <div>
       {/* Session header */}
-      <div className="flex items-center justify-between mb-8 bg-cream-card rounded-2xl p-6 border border-amber/5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-cream-card rounded-2xl p-6 border border-amber/5 shadow-sm">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h2 className="font-display text-3xl font-black italic text-espresso">
@@ -94,15 +131,56 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
             <span>PIN: <code className="font-bold text-mahogany/60">{session.pinCode}</code></span>
           </div>
         </div>
-        {session.status === "draft" && (
-          <button
-            onClick={activate}
-            className="flex items-center gap-2 bg-amber text-espresso px-5 py-3 rounded-xl text-sm font-bold hover:bg-amber-glow active:scale-[0.97] transition-all duration-200 shadow-lg shadow-amber/10 hover:shadow-xl hover:shadow-amber/20"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Aktifkan Sesi
-          </button>
-        )}
+        <div className="flex gap-2">
+          {/* Upload foto */}
+          <div className="relative">
+            <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all duration-200 ${
+              uploading
+                ? "bg-cream text-mahogany/30 pointer-events-none"
+                : "bg-cream border border-amber/10 text-mahogany hover:border-amber/20 hover:bg-warm-paper"
+            }`}>
+              {uploading ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-amber/30 border-t-amber rounded-full animate-spin" />
+                  Upload {uploadProgress.current}/{uploadProgress.total}
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload Foto
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleUploadPhotos}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+            {/* Progress bar */}
+            {uploading && uploadProgress.total > 0 && (
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-cream rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                />
+              </div>
+            )}
+          </div>
+
+          {session.status === "draft" && (
+            <button
+              onClick={activate}
+              className="flex items-center gap-2 bg-amber text-espresso px-5 py-3 rounded-xl text-sm font-bold hover:bg-amber-glow active:scale-[0.97] transition-all duration-200 shadow-lg shadow-amber/10 hover:shadow-xl hover:shadow-amber/20"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Aktifkan Sesi
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Compositions */}
@@ -187,12 +265,12 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         })}
         {compositions.length === 0 && (
           <div className="text-center py-16 bg-cream-card rounded-2xl border border-amber/5">
-            <Clock className="w-12 h-12 text-mahogany/10 mx-auto mb-4" />
+            <Image className="w-12 h-12 text-mahogany/10 mx-auto mb-4" />
             <h3 className="font-display text-xl font-bold text-espresso mb-2">
               Masih Kosong
             </h3>
             <p className="text-mahogany/30 text-sm max-w-xs mx-auto leading-relaxed">
-              Pelanggan belum memilih frame dan membuat komposisi. Bagikan slug dan PIN ke pelanggan agar mereka mulai.
+              Pelanggan belum memilih frame dan membuat komposisi. Upload foto di atas dan bagikan slug dan PIN ke pelanggan.
             </p>
           </div>
         )}

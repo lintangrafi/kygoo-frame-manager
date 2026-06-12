@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { compositions, frameSlots, allocations, photos, sessions, frames } from "@/db/schema";
+import { compositions, frameSlots, allocations, photos } from "@/db/schema";
 import { getCurrentCustomer } from "@/lib/auth/customer-session";
+import { getStaffSession } from "@/lib/auth/get-session";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: sessionId } = await params;
+
+  // Izinkan customer yang login atau staff
   const customer = await getCurrentCustomer();
-  if (!customer || customer.sessionId !== sessionId) {
+  const staff = await getStaffSession();
+
+  if (!customer && !staff) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (customer && customer.sessionId !== sessionId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -17,6 +26,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: sessionId } = await params;
+
+  // Hanya customer yang bisa membuat composition
   const customer = await getCurrentCustomer();
   if (!customer || customer.sessionId !== sessionId || customer.status === "completed") {
     return NextResponse.json({ error: "Unauthorized atau sesi sudah selesai" }, { status: 401 });

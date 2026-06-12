@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
+    sessionId: session.id,
     status: session.status,
     customerName: session.customerName,
   });

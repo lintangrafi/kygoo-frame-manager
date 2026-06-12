@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Camera, Image, LogOut, Sparkles } from "lucide-react";
+import { LayoutDashboard, Camera, Image, LogOut, Sparkles, Users } from "lucide-react";
 
 const links = [
   { href: "/staff", label: "Dashboard", icon: LayoutDashboard },
   { href: "/staff/sessions", label: "Sesi", icon: Camera },
   { href: "/staff/frames", label: "Frame", icon: Image },
+  { href: "/today", label: "Pelanggan", icon: Users },
 ];
 
 export function Sidebar() {
@@ -31,7 +32,9 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1 relative z-10">
         {links.map((link) => {
           const Icon = link.icon;
-          const active = pathname === link.href || pathname.startsWith(link.href + "/");
+          const active = link.href === "/today"
+            ? pathname.startsWith("/today") || pathname.startsWith("/s/")
+            : pathname === link.href || pathname.startsWith(link.href + "/");
           return (
             <Link
               key={link.href}

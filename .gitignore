@@ -32,12 +32,12 @@ yarn-error.log*
 /drizzle/
 
 # uploads (local only, not committed)
-/uploads/frames/*
-/uploads/sessions/*
-/uploads/exports/*
-!uploads/.gitkeep
-!uploads/frames/.gitkeep
-!uploads/sessions/.gitkeep
+/public/uploads/frames/*
+/public/uploads/sessions/*
+/public/uploads/exports/*
+!/public/uploads/.gitkeep
+!/public/uploads/frames/.gitkeep
+!/public/uploads/sessions/.gitkeep
 
 # typescript
 *.tsbuildinfo

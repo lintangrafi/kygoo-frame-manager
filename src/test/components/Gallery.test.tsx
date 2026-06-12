@@ -154,7 +154,7 @@ describe("Gallery", () => {
           ]),
       })
       .mockResolvedValueOnce({ json: () => Promise.resolve([]) })
-      .mockResolvedValueOnce({ json: () => Promise.resolve({ id: "comp-1" }) });
+      .mockResolvedValueOnce({ json: () => Promise.resolve({ id: "comp-1" }), ok: true });
 
     render(<Gallery sessionId="s-1" slug="ABC-2026-001" status="active" />);
     await waitFor(() => {

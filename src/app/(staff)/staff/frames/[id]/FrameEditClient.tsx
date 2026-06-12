@@ -15,6 +15,15 @@ export function FrameEditClient({ frame, slots }: { frame: any; slots: any[] }) 
     router.refresh();
   }
 
+  async function handleUpdateDetail(name: string, category: string, additionalFee: number) {
+    await fetch(`/api/frames/${frame.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, category, additionalFee }),
+    });
+    router.refresh();
+  }
+
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Edit Frame: {frame.name}</h2>
@@ -33,6 +42,10 @@ export function FrameEditClient({ frame, slots }: { frame: any; slots: any[] }) 
         onSave={handleSave}
         onUpload={() => {}}
         mode="edit"
+        initialName={frame.name}
+        initialCategory={frame.category}
+        initialAdditionalFee={frame.additionalFee}
+        onUpdateDetail={handleUpdateDetail}
       />
     </div>
   );

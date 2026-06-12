@@ -2,7 +2,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { v4 as uuid } from "uuid";
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "./public/uploads";
 
 export async function saveFile(file: File, subdir: string): Promise<string> {
   const dir = join(UPLOAD_DIR, subdir);
