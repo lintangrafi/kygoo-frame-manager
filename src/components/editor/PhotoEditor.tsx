@@ -63,15 +63,15 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
     canvas.width = canvasW;
     canvas.height = canvasH;
 
-    if (!imageCache.current.has(frameUrl)) {
-      await new Promise<void>(resolve => {
-        const img = new Image();
-        img.onload = () => { imageCache.current.set(frameUrl, img); resolve(); };
-        img.src = frameUrl;
-      });
-    }
-    ctx.drawImage(imageCache.current.get(frameUrl)!, 0, 0, canvasW, canvasH);
+    // --- LAYER SYSTEM: Foto di BAWAH, Frame di ATAS ---
+    // Sistem ini seperti LumaBooth / BoothLab.id:
+    // 1. Foto digambar dulu, di-clip ke area masing-masing slot
+    // 2. Frame PNG digambar di ATAS — area transparan pada frame
+    //    (lubang slot) akan memperlihatkan foto di bawahnya,
+    //    sementara area non-transparan (border/dekorasi) menutupi
+    //    tepi foto sehingga hasilnya rapi seperti frame sungguhan
 
+    // Load & draw photos FIRST (layer bawah)
     for (const slot of slots) {
       const alloc = allocations.find(a => a.slotId === slot.id);
       if (!alloc) continue;
@@ -110,13 +110,33 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
       ctx.drawImage(photoImg, drawX, drawY, scaledW, scaledH);
       ctx.restore();
       ctx.filter = "none";
+    }
+
+    // Load & draw frame on TOP (layer atas — dengan alpha transparency)
+    if (!imageCache.current.has(frameUrl)) {
+      await new Promise<void>(resolve => {
+        const img = new Image();
+        img.onload = () => { imageCache.current.set(frameUrl, img); resolve(); };
+        img.src = frameUrl;
+      });
+    }
+    ctx.drawImage(imageCache.current.get(frameUrl)!, 0, 0, canvasW, canvasH);
+
+    // Slot border & highlight (opsional, untuk UX)
+    for (const slot of slots) {
+      const slotX = Number(slot.x) * SCALE;
+      const slotY = Number(slot.y) * SCALE;
+      const slotW = Number(slot.width) * SCALE;
+      const slotH = Number(slot.height) * SCALE;
 
       const isSelected = selectedSlotIdx === slots.indexOf(slot);
-      ctx.strokeStyle = isSelected ? "#D4872B" : "rgba(92,45,26,0.2)";
-      ctx.lineWidth = isSelected ? 2.5 : 1.5;
-      ctx.strokeRect(slotX, slotY, slotW, slotH);
-
       if (isSelected) {
+        ctx.strokeStyle = "#D4872B";
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 3]);
+        ctx.strokeRect(slotX, slotY, slotW, slotH);
+        ctx.setLineDash([]);
+
         ctx.fillStyle = "rgba(212,135,43,0.08)";
         ctx.fillRect(slotX, slotY, slotW, slotH);
       }
@@ -148,6 +168,20 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
 
     if (existing) {
       setAllocations(prev => prev.map(a => a.slotId === slot.id ? { ...a, photoId } : a));
+    } else {
+      // Slot belum punya allocation — buat baru
+      setAllocations(prev => [...prev, {
+        id: `temp-${slot.id}-${photoId}`,
+        slotId: slot.id,
+        photoId,
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        hue: 0,
+        saturation: 100,
+        brightness: 100,
+        contrast: 100,
+      }]);
     }
   }
 
