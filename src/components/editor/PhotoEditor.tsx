@@ -63,13 +63,10 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
     canvas.width = canvasW;
     canvas.height = canvasH;
 
-    // --- LAYER SYSTEM: Foto di BAWAH, Frame di ATAS ---
-    // Sistem ini seperti LumaBooth / BoothLab.id:
-    // 1. Foto digambar dulu, di-clip ke area masing-masing slot
-    // 2. Frame PNG digambar di ATAS — area transparan pada frame
-    //    (lubang slot) akan memperlihatkan foto di bawahnya,
-    //    sementara area non-transparan (border/dekorasi) menutupi
-    //    tepi foto sehingga hasilnya rapi seperti frame sungguhan
+    // --- LAYER SYSTEM ala LumaBooth/BoothLab.id ---
+    // Layer 1 (bawah): Foto di-clip ke area slot
+    // Layer 2 (atas): Frame PNG transparan — lubang transparan expose foto
+    //                  area non-transparan (dekorasi/border) nutup tepi foto
 
     // Load & draw photos FIRST (layer bawah)
     for (const slot of slots) {
@@ -103,6 +100,7 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
 
       ctx.filter = `hue-rotate(${alloc.hue}deg) saturate(${alloc.saturation}%) brightness(${alloc.brightness}%) contrast(${alloc.contrast}%)`;
 
+      // Clip foto ke area slot (tidak boleh keluar dari lubang frame)
       ctx.save();
       ctx.beginPath();
       ctx.rect(slotX, slotY, slotW, slotH);
@@ -112,7 +110,7 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
       ctx.filter = "none";
     }
 
-    // Load & draw frame on TOP (layer atas — dengan alpha transparency)
+    // Load & draw frame on TOP (layer atas — area transparan expose foto)
     if (!imageCache.current.has(frameUrl)) {
       await new Promise<void>(resolve => {
         const img = new Image();
@@ -122,24 +120,30 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
     }
     ctx.drawImage(imageCache.current.get(frameUrl)!, 0, 0, canvasW, canvasH);
 
-    // Slot border & highlight (opsional, untuk UX)
-    for (const slot of slots) {
+    // Slot highlight untuk slot terpilih (hanya border, tanpa fill — jangan tutup frame)
+    if (selectedSlotIdx !== null && slots[selectedSlotIdx]) {
+      const slot = slots[selectedSlotIdx];
       const slotX = Number(slot.x) * SCALE;
       const slotY = Number(slot.y) * SCALE;
       const slotW = Number(slot.width) * SCALE;
       const slotH = Number(slot.height) * SCALE;
 
-      const isSelected = selectedSlotIdx === slots.indexOf(slot);
-      if (isSelected) {
-        ctx.strokeStyle = "#D4872B";
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([6, 3]);
-        ctx.strokeRect(slotX, slotY, slotW, slotH);
-        ctx.setLineDash([]);
+      ctx.strokeStyle = "#D4872B";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 3]);
+      ctx.strokeRect(slotX, slotY, slotW, slotH);
+      ctx.setLineDash([]);
 
-        ctx.fillStyle = "rgba(212,135,43,0.08)";
-        ctx.fillRect(slotX, slotY, slotW, slotH);
-      }
+      // Label highlight di atas
+      ctx.fillStyle = "rgba(212, 135, 43, 0.9)";
+      const labelText = `Slot ${slot.slotNumber}`;
+      ctx.font = `600 ${11 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
+      const labelW = ctx.measureText(labelText).width + 12;
+      ctx.beginPath();
+      ctx.roundRect(slotX + 4, slotY + 4, labelW, 20 * SCALE, 4);
+      ctx.fill();
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(labelText, slotX + 10, slotY + 16);
     }
   }, [frameUrl, frameWidth, frameHeight, slots, allocations, photos, selectedSlotIdx, SCALE, canvasW, canvasH]);
 
@@ -162,14 +166,14 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
   }
 
   function assignPhoto(photoId: string) {
-    if (selectedSlotIdx === null) return;
-    const slot = slots[selectedSlotIdx];
-    const existing = allocations.find(a => a.slotId === slot.id);
+    const slot = selectedSlotIdx !== null ? slots[selectedSlotIdx] : null;
+    if (!slot) return;
 
+    const existing = allocations.find(a => a.slotId === slot.id);
     if (existing) {
       setAllocations(prev => prev.map(a => a.slotId === slot.id ? { ...a, photoId } : a));
     } else {
-      // Slot belum punya allocation — buat baru
+      // Slot belum punya allocation — buat baru dan auto-assign
       setAllocations(prev => [...prev, {
         id: `temp-${slot.id}-${photoId}`,
         slotId: slot.id,
@@ -185,6 +189,28 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
     }
   }
 
+  /** Place photo ke slot kosong pertama yang belum terassign */
+  function autoPlacePhoto(photoId: string) {
+    // Cari slot pertama yang belum punya allocation
+    const allocSlots = new Set(allocations.map(a => a.slotId));
+    const emptySlot = slots.find(s => !allocSlots.has(s.id));
+    if (!emptySlot) return;
+
+    // Isi slot kosong
+    setAllocations(prev => [...prev, {
+      id: `temp-${emptySlot.id}-${photoId}`,
+      slotId: emptySlot.id,
+      photoId,
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+      hue: 0,
+      saturation: 100,
+      brightness: 100,
+      contrast: 100,
+    }]);
+  }
+
   function updateAllocation(field: string, value: number) {
     if (selectedSlotIdx === null) return;
     const slot = slots[selectedSlotIdx];
@@ -193,11 +219,19 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
 
   async function save() {
     setSaving(true);
-    await fetch(`/api/compositions/${compositionId}`, {
+    const res = await fetch(`/api/compositions/${compositionId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ allocations }),
     });
+    const data = await res.json();
+    // Ganti temp-ids dengan real IDs dari server
+    if (data._savedAllocations) {
+      setAllocations(prev => prev.map(a => {
+        const saved = data._savedAllocations.find((s: any) => s.id === a.id || (a.id.startsWith("temp-") && s.slotId === a.slotId));
+        return saved ? { ...a, id: saved.id || a.id } : a;
+      }));
+    }
     setSaving(false);
   }
 
@@ -210,6 +244,10 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
 
   const selectedSlot = selectedSlotIdx !== null ? slots[selectedSlotIdx] : null;
   const selectedAlloc = selectedSlot ? allocations.find(a => a.slotId === selectedSlot.id) : null;
+
+  // Hitung slot mana saja yang sudah terisi
+  const filledSlots = new Set(allocations.map(a => a.slotId));
+  const emptySlotCount = slots.filter(s => !filledSlots.has(s.id)).length;
 
   return (
     <div className="flex gap-6 p-6 bg-cream min-h-screen">
@@ -234,13 +272,31 @@ export function PhotoEditor({ compositionId, frameUrl, frameWidth, frameHeight, 
                 {photos.map(photo => (
                   <button
                     key={photo.id}
-                    onClick={() => assignPhoto(photo.id)}
+                    onClick={() => {
+                      // Auto-place: foto langsung masuk ke slot kosong pertama
+                      // Kalau semua slot sudah penuh, assign ke slot terpilih
+                      const filledSlotsSet = new Set(allocations.map(a => a.slotId));
+                      const hasEmptySlot = slots.some(s => !filledSlotsSet.has(s.id));
+                      if (hasEmptySlot && selectedSlotIdx === null) {
+                        autoPlacePhoto(photo.id);
+                      } else if (selectedSlotIdx !== null) {
+                        assignPhoto(photo.id);
+                      } else {
+                        // No slot selected, auto-place ke slot kosong pertama
+                        autoPlacePhoto(photo.id);
+                      }
+                    }}
                     className="aspect-square rounded-xl overflow-hidden border-2 border-amber/10 hover:border-amber shadow-md transition-all duration-200 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber/10"
                   >
                     <img src={photo.fileUrl} alt={photo.originalName} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
+              {emptySlotCount > 0 && (
+                <p className="mt-2 text-[11px] text-mahogany/40 text-center">
+                  {emptySlotCount} slot kosong &mdash; klik foto untuk auto-place
+                </p>
+              )}
             </div>
 
             {selectedAlloc && (

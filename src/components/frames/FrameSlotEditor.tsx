@@ -53,71 +53,91 @@ export function FrameSlotEditor({
   const scaleRef = useRef(SCALE);
   scaleRef.current = SCALE;
 
+  // Draw checkerboard pattern untuk visualisasi area transparan (spt Photoshop)
+  function drawCheckerboard(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const size = 8;
+    for (let y = 0; y < h; y += size) {
+      for (let x = 0; x < w; x += size) {
+        const idx = Math.floor(x / size) + Math.floor(y / size);
+        ctx.fillStyle = idx % 2 === 0 ? "#FFFFFF" : "#E2E2E2";
+        ctx.fillRect(x, y, size, size);
+      }
+    }
+  }
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = frameWidth * SCALE;
-    canvas.height = frameHeight * SCALE;
+    const cw = frameWidth * SCALE;
+    const ch = frameHeight * SCALE;
+    canvas.width = cw;
+    canvas.height = ch;
 
-    // Background
-    ctx.fillStyle = "#FEFAF3";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const imgSrc = uploadedPreview || frameUrl || undefined;
 
-    // Grid pattern untuk create mode
-    if (mode === "create" && !uploadedPreview && !frameUrl) {
-      ctx.strokeStyle = "rgba(212, 135, 43, 0.06)";
-      ctx.lineWidth = 1;
-      const gridSize = 20;
-      for (let x = 0; x <= canvas.width; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= canvas.height; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
-      }
-
-      ctx.strokeStyle = "rgba(212, 135, 43, 0.15)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([8, 4]);
-      ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = "rgba(92, 45, 26, 0.15)";
-      ctx.font = `${14 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
-      ctx.textAlign = "center";
-      ctx.fillText("Upload file PNG frame di panel kanan", canvas.width / 2, canvas.height / 2);
-      ctx.fillText(`Dimensi: ${frameWidth} × ${frameHeight}px`, canvas.width / 2, canvas.height / 2 + 24);
-      ctx.textAlign = "start";
-    }
-
-    const imgSrc = uploadedPreview || (frameUrl || undefined);
     if (imgSrc) {
+      // ============ LAYER SYSTEM ala LumaBooth/BoothLab ============
+      // Layer 1 (bawah): Checkerboard — untuk lihat area transparan frame
+      // Layer 2 (tengah): Frame PNG — area lubang transparan expose checkerboard
+      // Layer 3 (atas): Slot guide — border + label tipis (tanpa fill)
+
       const img = new Image();
       img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Frame sebagai layer bawah — area transparan akan jadi tempat foto
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, cw, ch);
 
-        drawSlots(ctx);
+        // Layer 1: Checkerboard — seperti Photoshop, untuk deteksi transparansi
+        drawCheckerboard(ctx, cw, ch);
+
+        // Layer 2: Frame PNG — area transparan akan memperlihatkan checkerboard
+        ctx.drawImage(img, 0, 0, cw, ch);
+
+        // Layer 3: Slot guide — border + label tipis
+        drawSlotGuides(ctx);
       };
       img.src = imgSrc;
     } else {
-      // Tanpa frame: grid + placeholder preview dengan dashed border
-      drawSlots(ctx);
+      // MODE CREATE (tanpa frame) — grid + placeholder visual
+      ctx.clearRect(0, 0, cw, ch);
+
+      // Background cream
+      ctx.fillStyle = "#FEFAF3";
+      ctx.fillRect(0, 0, cw, ch);
+
+      // Grid halus
+      ctx.strokeStyle = "rgba(212, 135, 43, 0.06)";
+      ctx.lineWidth = 1;
+      const gridSize = 20;
+      for (let x = 0; x <= cw; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
+      }
+      for (let y = 0; y <= ch; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
+      }
+
+      // Dashed border
+      ctx.strokeStyle = "rgba(212, 135, 43, 0.15)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      ctx.strokeRect(4, 4, cw - 8, ch - 8);
+      ctx.setLineDash([]);
+
+      // Petunjuk
+      ctx.fillStyle = "rgba(92, 45, 26, 0.15)";
+      ctx.font = `${14 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("Upload file PNG frame di panel kanan", cw / 2, ch / 2);
+      ctx.fillText(`Dimensi: ${frameWidth} × ${frameHeight}px`, cw / 2, ch / 2 + 24);
+      ctx.textAlign = "start";
+
+      drawSlotGuides(ctx);
     }
   }, [frameUrl, uploadedPreview, frameWidth, frameHeight, slots, selectedSlot, SCALE, mode]);
 
-  function drawSlots(ctx: CanvasRenderingContext2D) {
-    // Draw per-slot: pola cross-hatch untuk area "lubang" frame
-    const hasFrameImg = !!(uploadedPreview || frameUrl);
+  function drawSlotGuides(ctx: CanvasRenderingContext2D) {
+    const hasFrame = !!(uploadedPreview || frameUrl);
 
     slots.forEach((slot, i) => {
       const x = Number(slot.x) * SCALE;
@@ -126,35 +146,13 @@ export function FrameSlotEditor({
       const h = Number(slot.height) * SCALE;
       const isSelected = selectedSlot === i;
 
-      if (hasFrameImg) {
-        // Mode REALISTIS: ada frame, jadi slot adalah "lubang"
-        // Gambar white overlay tipis + cross-hatch untuk simulasikan area foto
-        const gradient = ctx.createLinearGradient(x, y, x, y + h);
-        gradient.addColorStop(0, isSelected ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)");
-        gradient.addColorStop(1, isSelected ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.10)");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, y, w, h);
-
-        // Cross-hatch pattern — seperti cahaya masuk melalui lubang
-        ctx.strokeStyle = isSelected ? "rgba(212, 135, 43, 0.20)" : "rgba(255,255,255,0.12)";
-        ctx.lineWidth = 0.5;
-        const step = 12;
-        for (let px = x; px < x + w; px += step) {
-          ctx.beginPath();
-          ctx.moveTo(px, y);
-          ctx.lineTo(px, y + h);
-          ctx.stroke();
-        }
-        for (let py = y; py < y + h; py += step) {
-          ctx.beginPath();
-          ctx.moveTo(x, py);
-          ctx.lineTo(x + w, py);
-          ctx.stroke();
-        }
-      } else {
-        // Mode TANPA FRAME: grid biasa + fill warna
+      if (!hasFrame) {
+        // MODE TANPA FRAME: tampilkan fill agar slot terlihat
         ctx.fillStyle = isSelected ? "rgba(212, 135, 43, 0.20)" : "rgba(212, 135, 43, 0.08)";
         ctx.fillRect(x, y, w, h);
+      } else {
+        // MODE DENGAN FRAME: hanya border + label — jangan tutupi frame!
+        // Untuk selected, tambahkan highlight halus di border saja
       }
 
       // Border
@@ -164,46 +162,45 @@ export function FrameSlotEditor({
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
 
-      // Label
-      ctx.fillStyle = isSelected ? "#D4872B" : "rgba(255,255,255,0.6)";
-      ctx.font = `600 ${11 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
-
-      // Label background untuk keterbacaan
+      // Label dengan background gelap (biar terbaca di atas frame)
       const labelText = `Slot ${slot.slotNumber}`;
+      ctx.font = `600 ${11 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
       const labelW = ctx.measureText(labelText).width + 12;
       const labelH = 20 * SCALE;
-      ctx.fillStyle = isSelected ? "rgba(45, 24, 16, 0.85)" : "rgba(45, 24, 16, 0.6)";
+
+      ctx.fillStyle = isSelected
+        ? "rgba(212, 135, 43, 0.9)"
+        : "rgba(45, 24, 16, 0.75)";
       ctx.beginPath();
       ctx.roundRect(x + 4, y + 4, labelW, labelH, 4);
       ctx.fill();
 
-      ctx.fillStyle = "#FEFAF3";
-      ctx.font = `600 ${11 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
+      ctx.fillStyle = "#FFFFFF";
       ctx.fillText(labelText, x + 10, y + 16);
 
-      // Ikon foto kecil di tengah slot (untuk menunjukkan ini tempat foto)
-      ctx.strokeStyle = isSelected ? "rgba(212, 135, 43, 0.25)" : "rgba(255,255,255,0.12)";
-      ctx.lineWidth = 1.5;
-      const iconSize = Math.min(w, h) * 0.2;
-      const iconCenterX = x + w / 2;
-      const iconCenterY = y + h / 2;
-      ctx.strokeRect(iconCenterX - iconSize/2, iconCenterY - iconSize/2, iconSize, iconSize * 1.2);
-      ctx.beginPath();
-      ctx.arc(iconCenterX, iconCenterY - iconSize * 0.15, iconSize * 0.2, 0, Math.PI * 2);
-      ctx.stroke();
+      // Jika tidak ada frame, gambar ikon foto di tengah slot
+      if (!hasFrame) {
+        ctx.strokeStyle = isSelected ? "rgba(212, 135, 43, 0.25)" : "rgba(92, 45, 26, 0.15)";
+        ctx.lineWidth = 1.5;
+        const iconSize = Math.min(w, h) * 0.22;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        // Rect icon
+        ctx.strokeRect(cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
+        // Circle (lensa)
+        ctx.beginPath();
+        ctx.arc(cx, cy, iconSize * 0.15, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
-      // Resize handles (only on selected slot)
+      // Resize handles (hanya untuk slot terpilih)
       if (isSelected) {
         ctx.fillStyle = "#D4872B";
         const hs = HANDLE_SIZE;
-        // nw
-        ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);
-        // ne
-        ctx.fillRect(x + w - hs / 2, y - hs / 2, hs, hs);
-        // sw
-        ctx.fillRect(x - hs / 2, y + h - hs / 2, hs, hs);
-        // se
-        ctx.fillRect(x + w - hs / 2, y + h - hs / 2, hs, hs);
+        ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);     // nw
+        ctx.fillRect(x + w - hs / 2, y - hs / 2, hs, hs); // ne
+        ctx.fillRect(x - hs / 2, y + h - hs / 2, hs, hs); // sw
+        ctx.fillRect(x + w - hs / 2, y + h - hs / 2, hs, hs); // se
       }
     });
   }
@@ -264,7 +261,7 @@ export function FrameSlotEditor({
       }
     }
 
-    // Check if click on any slot (including resize handle area)
+    // Check if click on any slot
     for (let i = slots.length - 1; i >= 0; i--) {
       const s = slots[i];
       if (mx >= Number(s.x) && mx <= Number(s.x) + Number(s.width) &&
@@ -340,7 +337,6 @@ export function FrameSlotEditor({
   }
 
   function handleCanvasMouseLeave() {
-    // Stop drag if mouse leaves canvas
     if (dragMode) {
       handleCanvasMouseUp();
     }
@@ -418,7 +414,7 @@ export function FrameSlotEditor({
           </button>
         </div>
         <p className="mt-2 text-[11px] text-mahogany/30 text-center">
-          {dragMode ? "Geser / atur ukuran slot..." : "Klik & geser slot untuk memindahkan · Tarik sudut untuk mengatur ukuran"} &bull; Dimensi frame: {frameWidth} × {frameHeight}px
+          {dragMode ? "Geser / atur ukuran slot..." : "Klik & geser slot untuk memindahkan · Tarik sudut untuk mengatur ukuran"} &bull; Dimensi: {frameWidth} × {frameHeight}px
         </p>
       </div>
       <div className="w-56 space-y-4">
