@@ -10,9 +10,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const [comp] = await db.select().from(compositions).where(eq(compositions.id, compId)).limit(1);
   if (!comp) return NextResponse.json({ error: "Composition tidak ditemukan" }, { status: 404 });
+  if (!comp.frameId) return NextResponse.json({ error: "Composition belum memiliki frame" }, { status: 400 });
 
-  const [frame] = await db.select().from(frames).where(eq(frames.id, comp.frameId!)).limit(1);
-  const slots = await db.select().from(frameSlots).where(eq(frameSlots.frameId, comp.frameId!)).orderBy(frameSlots.slotNumber);
+  const [frame] = await db.select().from(frames).where(eq(frames.id, comp.frameId)).limit(1);
+  const slots = await db.select().from(frameSlots).where(eq(frameSlots.frameId, comp.frameId)).orderBy(frameSlots.slotNumber);
   const allocs = await db.select().from(allocations).where(eq(allocations.compositionId, compId));
 
   const sessionPhotos = await db.select().from(photos).where(eq(photos.sessionId, comp.sessionId)).orderBy(photos.orderIndex);

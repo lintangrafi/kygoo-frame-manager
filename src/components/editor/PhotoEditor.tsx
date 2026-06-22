@@ -214,18 +214,14 @@ export function PhotoEditor({
     photos.forEach((p) => preloadImage(p.fileUrl));
   }, [frameUrl, photos, draw]);
 
-  // Render loop with requestAnimationFrame
+  // Trigger render — RAF single-shot, not infinite loop
   useEffect(() => {
     if (!frameLoaded) return;
-    const loop = () => {
-      draw();
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
+    rafRef.current = requestAnimationFrame(() => draw());
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [draw, frameLoaded]);
+  }, [draw, frameLoaded, allocations, zoom, selectedSlotIdx]);
 
   // ── Click handler ──
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
