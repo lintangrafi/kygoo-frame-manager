@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FrameSlotEditor } from "@/components/frames/FrameSlotEditor";
-import { CategorySelect } from "@/components/frames/CategoryTree";
+
 
 export default function NewFramePage() {
   const router = useRouter();

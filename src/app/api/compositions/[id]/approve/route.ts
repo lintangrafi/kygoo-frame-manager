@@ -12,6 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const [comp] = await db.select().from(compositions).where(eq(compositions.id, compId)).limit(1);
   if (!comp) return NextResponse.json({ error: "Composition tidak ditemukan" }, { status: 404 });
+  if (!comp.sessionId) return NextResponse.json({ error: "Composition tidak memiliki session" }, { status: 400 });
 
   await db.update(compositions).set({ status: "finalized" }).where(eq(compositions.id, compId));
 

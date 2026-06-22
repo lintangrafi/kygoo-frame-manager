@@ -14,18 +14,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const [comp] = await db.select().from(compositions).where(eq(compositions.id, compId)).limit(1);
   if (!comp) return NextResponse.json({ error: "Composition tidak ditemukan" }, { status: 404 });
 
-  const [frame] = await db.select().from(frames).where(eq(frames.id, comp.frameId!)).limit(1);
+  if (!comp.frameId) return NextResponse.json({ error: "Composition belum memiliki frame" }, { status: 400 });
+
+  const [frame] = await db.select().from(frames).where(eq(frames.id, comp.frameId)).limit(1);
   if (!frame) return NextResponse.json({ error: "Frame tidak ditemukan" }, { status: 404 });
 
   const slots = await db.select().from(frameSlots).where(eq(frameSlots.frameId, frame.id)).orderBy(frameSlots.slotNumber);
   const allocs = await db.select().from(allocations).where(eq(allocations.compositionId, compId));
 
-  const photoIds = allocs.map(a => a.photoId!).filter(Boolean);
-  const sessionPhotos = photoIds.length > 0
-    ? await db.select().from(photos)
+  // Fetch photos for this session — filter by composition's session
+  const sessionPhotos = comp.sessionId
+    ? await db.select().from(photos).where(eq(photos.sessionId, comp.sessionId))
     : [];
 
   const exportAllocs = allocs.map(alloc => {
+    if (!alloc.slotId || !alloc.photoId) return null;
     const slot = slots.find(s => s.id === alloc.slotId);
     const photo = sessionPhotos.find(p => p.id === alloc.photoId);
     if (!slot || !photo) return null;

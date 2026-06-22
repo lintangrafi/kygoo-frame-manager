@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Upload, Plus, Trash2, Save } from "lucide-react";
+import { CategoryTree } from "./CategoryTree";
 
 interface Slot {
   slotNumber: number;
@@ -18,12 +19,12 @@ interface FrameSlotEditorProps {
   frameHeight: number;
   initialSlots: Slot[];
   onSave: (slots: Slot[]) => void;
-  onUpload: (file: File, name: string, category: string, additionalFee: number) => void;
+  onUpload: (file: File, name: string, category: string, additionalFee: number, categoryId?: string) => void;
   mode: "create" | "edit";
   initialName?: string;
   initialCategory?: string;
   initialAdditionalFee?: number;
-  onUpdateDetail?: (name: string, category: string, additionalFee: number) => void;
+  onUpdateDetail?: (name: string, category: string, additionalFee: number, categoryId?: string) => void;
 }
 
 const HANDLE_SIZE = 10;
@@ -43,6 +44,7 @@ export function FrameSlotEditor({
   const [file, setFile] = useState<File | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
   const [detailSaved, setDetailSaved] = useState(false);
+  const [categoryId, setCategoryId] = useState<string>("");
 
   // Drag / resize state
   const [dragMode, setDragMode] = useState<"move" | "resize" | null>(null);
@@ -320,7 +322,7 @@ export function FrameSlotEditor({
 
   async function handleUpdateDetail() {
     if (onUpdateDetail) {
-      await onUpdateDetail(name, category, additionalFee);
+      await onUpdateDetail(name, category, additionalFee, categoryId);
       setDetailSaved(true);
       setTimeout(() => setDetailSaved(false), 2000);
     }
@@ -406,6 +408,15 @@ export function FrameSlotEditor({
             </div>
             <div>
               <label className="block text-xs font-semibold text-mahogany/50 uppercase tracking-wider mb-2">
+                Kategori Pohon
+              </label>
+              <CategoryTree
+                selectedId={categoryId}
+                onSelect={(cat) => setCategoryId(cat.id)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-mahogany/50 uppercase tracking-wider mb-2">
                 File Frame (PNG)
               </label>
               <div className="bg-cream border-2 border-dashed border-amber/10 rounded-xl px-4 py-6 text-center hover:border-amber/20 transition-all duration-200">
@@ -427,7 +438,7 @@ export function FrameSlotEditor({
               )}
             </div>
             <button
-              onClick={() => file && onUpload(file, name, category, additionalFee)}
+              onClick={() => file && onUpload(file, name, category, additionalFee, categoryId)}
               disabled={!file || !name}
               className="w-full bg-amber text-espresso rounded-xl py-3 text-sm font-bold hover:bg-amber-glow transition-all duration-200 shadow-lg shadow-amber/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
