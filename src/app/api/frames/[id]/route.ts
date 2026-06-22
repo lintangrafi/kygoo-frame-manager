@@ -24,8 +24,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const [updated] = await db.update(frames).set({
     name: body.name,
     category: body.category,
+    categoryId: body.categoryId || null,
     additionalFee: body.additionalFee,
     isActive: body.isActive,
+    metadata: body.metadata || {},
   }).where(eq(frames.id, id)).returning();
 
   return NextResponse.json(updated);

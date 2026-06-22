@@ -1,5 +1,18 @@
-import { pgTable, uuid, text, integer, numeric, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, numeric, boolean, timestamp, uniqueIndex, jsonb, foreignKey } from "drizzle-orm/pg-core";
 
+// ── Frame Categories (Tree) ──────────────────────────────────────
+export const frameCategories = pgTable("frame_categories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").unique().notNull(),
+  icon: text("icon").default("frame"),
+  description: text("description"),
+  parentId: uuid("parent_id").references((): any => frameCategories.id),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Staff ────────────────────────────────────────────────────────
 export const staff = pgTable("staff", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").unique().notNull(),
@@ -33,11 +46,13 @@ export const photos = pgTable("photos", {
 export const frames = pgTable("frames", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  category: text("category").notNull(), // '2R' | '4R'
+  category: text("category").notNull(), // '2R' | '4R' — legacy ref
+  categoryId: uuid("category_id").references(() => frameCategories.id),
   fileUrl: text("file_url").notNull(),
   dimensionsW: integer("dimensions_w").notNull(),
   dimensionsH: integer("dimensions_h").notNull(),
   additionalFee: integer("additional_fee").default(0),
+  metadata: jsonb("metadata").default({}),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -33,10 +33,12 @@ export async function POST(req: NextRequest) {
   const [frame] = await db.insert(frames).values({
     name,
     category,
+    categoryId: formData.get("categoryId") as string || null,
     fileUrl,
     dimensionsW: metadata.width || 1200,
     dimensionsH: metadata.height || 1800,
     additionalFee,
+    metadata: formData.get("metadata") ? JSON.parse(formData.get("metadata") as string) : {},
   }).returning();
 
   return NextResponse.json(frame);
