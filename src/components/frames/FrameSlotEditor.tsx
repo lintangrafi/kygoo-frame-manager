@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Upload, Plus, Trash2, Save } from "lucide-react";
+import { Upload, Plus, Trash2, Save, ZoomIn, ZoomOut, RotateCcw, Move } from "lucide-react";
 
 interface Slot {
   slotNumber: number;
@@ -28,6 +28,9 @@ interface FrameSlotEditorProps {
 
 const HANDLE_SIZE = 10;
 const MIN_SLOT_SIZE = 30;
+const GRID_SIZE = 20;
+const MAX_ZOOM = 3;
+const MIN_ZOOM = 0.5;
 
 export function FrameSlotEditor({
   frameUrl, frameWidth, frameHeight, initialSlots, onSave, onUpload, mode,
@@ -35,6 +38,7 @@ export function FrameSlotEditor({
   onUpdateDetail,
 }: FrameSlotEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [name, setName] = useState(initialName);
@@ -44,40 +48,71 @@ export function FrameSlotEditor({
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
   const [detailSaved, setDetailSaved] = useState(false);
 
+  // Viewport state (zoom/pan)
+  const [zoom, setZoom] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+
   // Drag / resize state
-  const [dragMode, setDragMode] = useState<"move" | "resize" | null>(null);
+  const [dragMode, setDragMode] = useState<"move" | "resize" | "create" | null>(null);
   const [resizeCorner, setResizeCorner] = useState<"nw" | "ne" | "sw" | "se" | null>(null);
   const dragStartRef = useRef<{ mx: number; my: number; slot: { x: number; y: number; width: number; height: number } } | null>(null);
+  const createStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const SCALE = Math.min(1, 600 / Math.max(frameWidth, frameHeight));
-  const scaleRef = useRef(SCALE);
-  scaleRef.current = SCALE;
+  // Image loading state
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const drawTokenRef = useRef(0); // Token to track current draw operation
 
+  const getScale = useCallback(() => {
+    if (!containerRef.current) return 1;
+    const containerWidth = containerRef.current.clientWidth - 32; // padding
+    const containerHeight = containerRef.current.clientHeight - 32;
+    return Math.min(zoom, containerWidth / frameWidth, containerHeight / frameHeight, 2);
+  }, [zoom, frameWidth, frameHeight]);
+
+  const [scale, setScale] = useState(1);
+  const scaleRef = useRef(1);
+  scaleRef.current = scale;
+
+  useEffect(() => {
+    const newScale = getScale();
+    setScale(newScale);
+    scaleRef.current = newScale;
+  }, [getScale]);
+
+  // Draw function
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = frameWidth * SCALE;
-    canvas.height = frameHeight * SCALE;
+    const s = scaleRef.current;
+
+    canvas.width = frameWidth * s;
+    canvas.height = frameHeight * s;
+
+    // Apply pan offset
+    ctx.save();
+    ctx.translate(panOffset.x, panOffset.y);
 
     // Background
     ctx.fillStyle = "#FEFAF3";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Grid pattern untuk create mode
+    // Grid pattern
     if (mode === "create" && !uploadedPreview && !frameUrl) {
       ctx.strokeStyle = "rgba(212, 135, 43, 0.06)";
       ctx.lineWidth = 1;
-      const gridSize = 20;
-      for (let x = 0; x <= canvas.width; x += gridSize) {
+      for (let x = 0; x <= canvas.width; x += GRID_SIZE * s) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
       }
-      for (let y = 0; y <= canvas.height; y += gridSize) {
+      for (let y = 0; y <= canvas.height; y += GRID_SIZE * s) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
@@ -91,7 +126,7 @@ export function FrameSlotEditor({
       ctx.setLineDash([]);
 
       ctx.fillStyle = "rgba(92, 45, 26, 0.15)";
-      ctx.font = `${14 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
+      ctx.font = `${14 * s}px 'Plus Jakarta Sans', sans-serif`;
       ctx.textAlign = "center";
       ctx.fillText("Upload file PNG frame di panel kanan", canvas.width / 2, canvas.height / 2);
       ctx.fillText(`Dimensi: ${frameWidth} × ${frameHeight}px`, canvas.width / 2, canvas.height / 2 + 24);
@@ -99,26 +134,35 @@ export function FrameSlotEditor({
     }
 
     const imgSrc = uploadedPreview || (frameUrl || undefined);
-    if (imgSrc) {
+    if (imgSrc && imageLoaded) {
+      const currentToken = ++drawTokenRef.current; // Increment token for this draw operation
       const img = new Image();
       img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Only draw if this is still the current draw operation
+        if (currentToken !== drawTokenRef.current) return;
+        ctx.clearRect(-panOffset.x / s, -panOffset.y / s, canvas.width / s, canvas.height / s);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        drawSlots(ctx);
+        drawSlots(ctx, s);
+      };
+      img.onerror = () => {
+        if (currentToken !== drawTokenRef.current) return;
+        setImageError(true);
+        drawSlots(ctx, s);
       };
       img.src = imgSrc;
     } else {
-      drawSlots(ctx);
+      drawSlots(ctx, s);
     }
-  }, [frameUrl, uploadedPreview, frameWidth, frameHeight, slots, selectedSlot, SCALE, mode]);
 
-  function drawSlots(ctx: CanvasRenderingContext2D) {
+    ctx.restore();
+  }, [frameUrl, uploadedPreview, frameWidth, frameHeight, slots, selectedSlot, scale, panOffset, mode, imageLoaded]);
+
+  function drawSlots(ctx: CanvasRenderingContext2D, s: number) {
     slots.forEach((slot, i) => {
-      const x = Number(slot.x) * SCALE;
-      const y = Number(slot.y) * SCALE;
-      const w = Number(slot.width) * SCALE;
-      const h = Number(slot.height) * SCALE;
+      const x = Number(slot.x) * s;
+      const y = Number(slot.y) * s;
+      const w = Number(slot.width) * s;
+      const h = Number(slot.height) * s;
       const isSelected = selectedSlot === i;
 
       // Fill
@@ -134,7 +178,7 @@ export function FrameSlotEditor({
 
       // Label
       ctx.fillStyle = isSelected ? "#2D1810" : "rgba(92, 45, 26, 0.5)";
-      ctx.font = `600 ${11 * SCALE}px 'Plus Jakarta Sans', sans-serif`;
+      ctx.font = `600 ${11 * s}px 'Plus Jakarta Sans', sans-serif`;
       ctx.fillText(`Slot ${slot.slotNumber}`, x + 6, y + 16);
 
       // Resize handles (only on selected slot)
@@ -153,21 +197,44 @@ export function FrameSlotEditor({
     });
   }
 
+  useEffect(() => {
+    if (uploadedPreview || frameUrl) {
+      const img = new Image();
+      img.onload = () => setImageLoaded(true);
+      img.onerror = () => setImageError(true);
+      img.src = uploadedPreview || frameUrl || "";
+    } else {
+      setImageLoaded(true);
+    }
+  }, [uploadedPreview, frameUrl]);
+
   useEffect(() => { draw(); }, [draw]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0] || null;
     setFile(selected);
+    setImageError(false);
     if (selected) {
       const reader = new FileReader();
-      reader.onload = () => setUploadedPreview(reader.result as string);
+      reader.onload = () => {
+        setUploadedPreview(reader.result as string);
+        setImageLoaded(false);
+      };
       reader.readAsDataURL(selected);
     }
   }
 
-  // Detect resize corner at unscaled mouse coordinates
+  function getCanvasMouse(e: React.MouseEvent<HTMLCanvasElement>) {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const s = scaleRef.current;
+    return {
+      mx: (e.clientX - rect.left - panOffset.x) / s,
+      my: (e.clientY - rect.top - panOffset.y) / s,
+    };
+  }
+
   function getResizeCorner(mxUnscaled: number, myUnscaled: number, slot: Slot): "nw" | "ne" | "sw" | "se" | null {
-    const hs = HANDLE_SIZE / SCALE;
+    const hs = HANDLE_SIZE / scaleRef.current;
     const corners: { corner: "nw" | "ne" | "sw" | "se"; cx: number; cy: number }[] = [
       { corner: "nw", cx: Number(slot.x), cy: Number(slot.y) },
       { corner: "ne", cx: Number(slot.x) + Number(slot.width), cy: Number(slot.y) },
@@ -182,17 +249,16 @@ export function FrameSlotEditor({
     return null;
   }
 
-  function getCanvasMouse(e: React.MouseEvent<HTMLCanvasElement>) {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const s = scaleRef.current;
-    return {
-      mx: (e.clientX - rect.left) / s,
-      my: (e.clientY - rect.top) / s,
-    };
-  }
-
   function handleCanvasMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
     const { mx, my } = getCanvasMouse(e);
+
+    // Middle mouse button or space+click for panning
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      e.preventDefault();
+      setIsPanning(true);
+      panStartRef.current = { x: e.clientX, y: e.clientY, offsetX: panOffset.x, offsetY: panOffset.y };
+      return;
+    }
 
     // Check resize handles on selected slot first
     if (selectedSlot !== null) {
@@ -209,7 +275,7 @@ export function FrameSlotEditor({
       }
     }
 
-    // Check if click on any slot (including resize handle area)
+    // Check if click on any slot
     for (let i = slots.length - 1; i >= 0; i--) {
       const s = slots[i];
       if (mx >= Number(s.x) && mx <= Number(s.x) + Number(s.width) &&
@@ -225,14 +291,60 @@ export function FrameSlotEditor({
       }
     }
 
-    // Click on empty area — deselect
+    // Click on empty area — start creating a new slot
     setSelectedSlot(null);
-    setDragMode(null);
+    setDragMode("create");
+    setResizeCorner(null);
+    createStartRef.current = { x: mx, y: my };
   }
 
   function handleCanvasMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!dragMode || selectedSlot === null || !dragStartRef.current) return;
+    // Handle panning
+    if (isPanning && panStartRef.current) {
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      setPanOffset({
+        x: panStartRef.current.offsetX + dx,
+        y: panStartRef.current.offsetY + dy,
+      });
+      return;
+    }
+
+    if (!dragMode) return;
+
     const { mx, my } = getCanvasMouse(e);
+
+    if (dragMode === "create" && createStartRef.current) {
+      // Draw preview of new slot
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const startX = Math.min(createStartRef.current.x, mx);
+      const startY = Math.min(createStartRef.current.y, my);
+      const width = Math.abs(mx - createStartRef.current.x);
+      const height = Math.abs(my - createStartRef.current.y);
+
+      // Redraw to show preview
+      draw();
+
+      // Draw preview rectangle
+      ctx.save();
+      ctx.translate(panOffset.x, panOffset.y);
+      ctx.strokeStyle = "#D4872B";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(startX * scaleRef.current, startY * scaleRef.current, width * scaleRef.current, height * scaleRef.current);
+      ctx.fillStyle = "rgba(212, 135, 43, 0.1)";
+      ctx.fillRect(startX * scaleRef.current, startY * scaleRef.current, width * scaleRef.current, height * scaleRef.current);
+      ctx.setLineDash([]);
+      ctx.restore();
+      return;
+    }
+
+    if (selectedSlot === null || !dragStartRef.current) return;
+
     const ds = dragStartRef.current;
     const dx = mx - ds.mx;
     const dy = my - ds.my;
@@ -278,23 +390,68 @@ export function FrameSlotEditor({
     }));
   }
 
-  function handleCanvasMouseUp() {
+  function handleCanvasMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+
+    if (dragMode === "create" && createStartRef.current) {
+      const { mx, my } = getCanvasMouse(e);
+      const startX = Math.min(createStartRef.current.x, mx);
+      const startY = Math.min(createStartRef.current.y, my);
+      const width = Math.abs(mx - createStartRef.current.x);
+      const height = Math.abs(my - createStartRef.current.y);
+
+      // Only create slot if it's large enough
+      if (width >= MIN_SLOT_SIZE && height >= MIN_SLOT_SIZE) {
+        const newSlot: Slot = {
+          slotNumber: slots.length + 1,
+          x: Math.round(startX),
+          y: Math.round(startY),
+          width: Math.round(width),
+          height: Math.round(height),
+          rotation: 0,
+        };
+        setSlots(prev => [...prev, newSlot]);
+        setSelectedSlot(slots.length);
+      }
+    }
+
     setDragMode(null);
     setResizeCorner(null);
     dragStartRef.current = null;
+    createStartRef.current = null;
   }
 
   function handleCanvasMouseLeave() {
-    // Stop drag if mouse leaves canvas
-    if (dragMode) {
-      handleCanvasMouseUp();
+    if (dragMode === "create" && createStartRef.current) {
+      // Cancel create if mouse leaves canvas
+      setDragMode(null);
+      createStartRef.current = null;
+    }
+    if (isPanning) {
+      setIsPanning(false);
     }
   }
 
-  function getCursorStyle(): string {
-    if (dragMode) return "grabbing";
-    if (selectedSlot !== null) return "move";
-    return "crosshair";
+  function handleWheel(e: React.WheelEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom(prev => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev + delta)));
+  }
+
+  function handleZoomIn() {
+    setZoom(prev => Math.min(MAX_ZOOM, prev + 0.25));
+  }
+
+  function handleZoomOut() {
+    setZoom(prev => Math.max(MIN_ZOOM, prev - 0.25));
+  }
+
+  function handleResetView() {
+    setZoom(1);
+    setPanOffset({ x: 0, y: 0 });
   }
 
   function addSlot() {
@@ -318,6 +475,25 @@ export function FrameSlotEditor({
     setSelectedSlot(null);
   }
 
+  // Move slot up/down in order
+  function moveSlotUp() {
+    if (selectedSlot === null || selectedSlot === 0) return;
+    const newSlots = [...slots];
+    [newSlots[selectedSlot - 1], newSlots[selectedSlot]] = [newSlots[selectedSlot], newSlots[selectedSlot - 1]];
+    newSlots.forEach((s, i) => s.slotNumber = i + 1);
+    setSlots(newSlots);
+    setSelectedSlot(selectedSlot - 1);
+  }
+
+  function moveSlotDown() {
+    if (selectedSlot === null || selectedSlot === slots.length - 1) return;
+    const newSlots = [...slots];
+    [newSlots[selectedSlot], newSlots[selectedSlot + 1]] = [newSlots[selectedSlot + 1], newSlots[selectedSlot]];
+    newSlots.forEach((s, i) => s.slotNumber = i + 1);
+    setSlots(newSlots);
+    setSelectedSlot(selectedSlot + 1);
+  }
+
   async function handleUpdateDetail() {
     if (onUpdateDetail) {
       await onUpdateDetail(name, category, additionalFee);
@@ -326,18 +502,74 @@ export function FrameSlotEditor({
     }
   }
 
+  function getCursorStyle(): string {
+    if (isPanning) return "grabbing";
+    if (dragMode === "create") return "crosshair";
+    if (dragMode === "move") return "grabbing";
+    if (selectedSlot !== null) return "move";
+    if (uploadedPreview || frameUrl) return "default";
+    return "crosshair";
+  }
+
   return (
     <div className="flex gap-6">
-      <div className="flex-1">
-        <canvas
-          ref={canvasRef}
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseLeave}
-          style={{ cursor: getCursorStyle() }}
-          className="border-2 border-amber/10 rounded-2xl max-w-full shadow-lg shadow-amber/5 select-none"
-        />
+      <div className="flex-1" ref={containerRef}>
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 mb-3 bg-cream-card rounded-xl p-2 border border-amber/5">
+          <button
+            onClick={handleZoomIn}
+            title="Zoom In"
+            className="p-2 rounded-lg hover:bg-cream transition-colors"
+          >
+            <ZoomIn className="w-4 h-4 text-mahogany/50" />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            title="Zoom Out"
+            className="p-2 rounded-lg hover:bg-cream transition-colors"
+          >
+            <ZoomOut className="w-4 h-4 text-mahogany/50" />
+          </button>
+          <button
+            onClick={handleResetView}
+            title="Reset View"
+            className="p-2 rounded-lg hover:bg-cream transition-colors"
+          >
+            <RotateCcw className="w-4 h-4 text-mahogany/50" />
+          </button>
+          <div className="h-6 w-px bg-amber/10 mx-1" />
+          <span className="text-xs text-mahogany/30 font-medium">
+            {Math.round(scale * 100)}%
+          </span>
+          <div className="h-6 w-px bg-amber/10 mx-1" />
+          <span className="text-xs text-mahogany/30">
+            Alt+Drag untuk pan
+          </span>
+        </div>
+
+        {/* Canvas */}
+        <div className="relative overflow-hidden rounded-2xl border-2 border-amber/10 shadow-lg shadow-amber/5 bg-cream">
+          <canvas
+            ref={canvasRef}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseLeave}
+            onWheel={handleWheel}
+            style={{
+              cursor: getCursorStyle(),
+              maxHeight: "60vh"
+            }}
+            className="max-w-full select-none"
+          />
+          {imageError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-cream/80">
+              <p className="text-mahogany/50 text-sm">Gagal memuat gambar</p>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
         <div className="flex gap-2 mt-3">
           <button
             onClick={addSlot}
@@ -354,18 +586,45 @@ export function FrameSlotEditor({
             <Trash2 className="w-3.5 h-3.5" />
             Hapus Slot
           </button>
+          {selectedSlot !== null && (
+            <>
+              <button
+                onClick={moveSlotUp}
+                disabled={selectedSlot === 0}
+                className="flex items-center gap-1.5 bg-cream text-mahogany/50 px-3 py-2 rounded-xl text-xs font-bold border border-amber/10 hover:border-amber/20 disabled:opacity-30 transition-all duration-200"
+              >
+                ↑
+              </button>
+              <button
+                onClick={moveSlotDown}
+                disabled={selectedSlot === slots.length - 1}
+                className="flex items-center gap-1.5 bg-cream text-mahogany/50 px-3 py-2 rounded-xl text-xs font-bold border border-amber/10 hover:border-amber/20 disabled:opacity-30 transition-all duration-200"
+              >
+                ↓
+              </button>
+            </>
+          )}
           <button
             onClick={() => onSave(slots)}
-            className="flex items-center gap-1.5 bg-amber text-espresso px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-glow transition-all duration-200 shadow-lg shadow-amber/10"
+            className="flex items-center gap-1.5 bg-amber text-espresso px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-glow transition-all duration-200 shadow-lg shadow-amber/10 ml-auto"
           >
             <Save className="w-3.5 h-3.5" />
             Simpan Layout
           </button>
         </div>
         <p className="mt-2 text-[11px] text-mahogany/30 text-center">
-          {dragMode ? "Geser / atur ukuran slot..." : "Klik & geser slot untuk memindahkan · Tarik sudut untuk mengatur ukuran"} &bull; Dimensi frame: {frameWidth} × {frameHeight}px
+          {dragMode === "create"
+            ? "Tarik untuk membuat slot baru..."
+            : dragMode === "move"
+            ? "Geser untuk memindahkan slot..."
+            : dragMode === "resize"
+            ? "Tarik sudut untuk mengatur ukuran..."
+            : "Klik & drag untuk membuat slot · Klik slot untuk memilih · Alt+drag untuk pan"}
+          &bull; Dimensi: {frameWidth} × {frameHeight}px
         </p>
       </div>
+
+      {/* Side Panel */}
       <div className="w-56 space-y-4">
         {mode === "create" && (
           <>
@@ -492,6 +751,33 @@ export function FrameSlotEditor({
             >
               {detailSaved ? "✓ Tersimpan" : "Simpan Detail"}
             </button>
+
+            {/* Slot info panel */}
+            {selectedSlot !== null && slots[selectedSlot] && (
+              <div className="bg-cream-card rounded-xl p-4 border border-amber/5 space-y-3">
+                <div className="text-xs font-bold text-amber uppercase tracking-wider">
+                  Slot {slots[selectedSlot].slotNumber}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-mahogany/40">X:</span>
+                    <span className="ml-1 font-mono">{slots[selectedSlot].x}</span>
+                  </div>
+                  <div>
+                    <span className="text-mahogany/40">Y:</span>
+                    <span className="ml-1 font-mono">{slots[selectedSlot].y}</span>
+                  </div>
+                  <div>
+                    <span className="text-mahogany/40">W:</span>
+                    <span className="ml-1 font-mono">{slots[selectedSlot].width}</span>
+                  </div>
+                  <div>
+                    <span className="text-mahogany/40">H:</span>
+                    <span className="ml-1 font-mono">{slots[selectedSlot].height}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

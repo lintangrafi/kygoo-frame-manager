@@ -10,6 +10,8 @@ interface PinGateProps {
     customerName: string;
     status: string;
     photoCount: number;
+    basePrice?: number;
+    extraFrameFee?: number;
   }) => void;
 }
 
@@ -39,12 +41,19 @@ export function PinGate({ slug, onSuccess }: PinGateProps) {
 
     const data = await res.json();
 
-    // Ambil jumlah foto
+    // Ambil jumlah foto dan pricing
     const photoRes = await fetch(`/api/sessions?slug=${slug}`);
     const sessions = await photoRes.json();
     let photoCount = 0;
+    let basePrice = 0;
+    let extraFrameFee = 0;
+
     if (Array.isArray(sessions) && sessions.length > 0) {
-      const sessionId = sessions[0].id;
+      const sessionData = sessions[0];
+      basePrice = sessionData.basePrice || 0;
+      extraFrameFee = sessionData.extraFrameFee || 0;
+
+      const sessionId = sessionData.id;
       const photosRes = await fetch(`/api/sessions/${sessionId}/photos`);
       const photos = await photosRes.json();
       photoCount = Array.isArray(photos) ? photos.length : 0;
@@ -58,6 +67,8 @@ export function PinGate({ slug, onSuccess }: PinGateProps) {
         customerName: data.customerName,
         status: data.status || "active",
         photoCount,
+        basePrice,
+        extraFrameFee,
       });
     }, 400);
   }

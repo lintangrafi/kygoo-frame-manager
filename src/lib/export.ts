@@ -21,6 +21,7 @@ interface AllocationData {
   saturation: number;
   brightness: number;
   contrast: number;
+  rotation?: number;
 }
 
 export async function composeFrame(
@@ -42,16 +43,23 @@ export async function composeFrame(
     const scaledW = Math.round(alloc.slot.width * alloc.scale);
     const scaledH = Math.round(alloc.slot.height * alloc.scale);
 
-    const resized = await sharp(photoBuffer)
+    // Apply rotation if specified
+    let resized = await sharp(photoBuffer)
       .resize(scaledW, scaledH, { fit: "cover", position: "center" })
       .modulate({
         brightness: alloc.brightness / 100,
         saturation: alloc.saturation / 100,
         hue: alloc.hue,
       })
-      .linear(alloc.contrast / 100, -(128 * ((alloc.contrast / 100) - 1)))
-      .png()
-      .toBuffer();
+      .linear(alloc.contrast / 100, -(128 * ((alloc.contrast / 100) - 1)));
+
+    // Apply rotation if specified
+    const rotation = alloc.rotation || 0;
+    if (rotation !== 0) {
+      resized = resized.rotate(rotation, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
+    }
+
+    const resizedBuffer = await resized.png().toBuffer();
 
     const centerX = alloc.slot.x + alloc.slot.width / 2;
     const centerY = alloc.slot.y + alloc.slot.height / 2;
@@ -59,7 +67,7 @@ export async function composeFrame(
     const top = Math.round(centerY - scaledH / 2 + alloc.offsetY);
 
     layers.push({
-      input: resized,
+      input: resizedBuffer,
       top: Math.max(0, top),
       left: Math.max(0, left),
     });

@@ -1,11 +1,19 @@
-import { NextResponse } from "next/server";
-import { eq, and, gte, or } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+import { eq, and, gte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions } from "@/db/schema";
 
-export async function GET() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const dateParam = url.searchParams.get("date");
+
+  // Use provided date or default to today
+  const targetDate = dateParam ? new Date(dateParam) : new Date();
+  targetDate.setHours(0, 0, 0, 0);
+
+  // End of the target date
+  const endDate = new Date(targetDate);
+  endDate.setHours(23, 59, 59, 999);
 
   const activeSessions = await db
     .select({
@@ -17,11 +25,10 @@ export async function GET() {
     })
     .from(sessions)
     .where(
-      or(
-        // Sesi yang dibuat hari ini (draft/active/completed)
-        gte(sessions.createdAt, today),
-        // Sesi yang masih active meskipun dibuat sebelumnya
-        eq(sessions.status, "active")
+      and(
+        // Session dibuat pada tanggal yang dipilih
+        gte(sessions.createdAt, targetDate),
+        sql`${sessions.createdAt} <= ${endDate}`
       )
     )
     .orderBy(sessions.createdAt);

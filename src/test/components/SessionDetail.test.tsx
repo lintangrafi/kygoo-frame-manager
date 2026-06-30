@@ -11,6 +11,7 @@ describe("SessionDetail", () => {
   it("shows skeleton loading state initially", () => {
     (global.fetch as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ json: () => new Promise(() => {}) })
+      .mockResolvedValueOnce({ json: () => new Promise(() => {}) })
       .mockResolvedValueOnce({ json: () => new Promise(() => {}) });
 
     const { container } = render(<SessionDetail sessionId="s-1" />);
@@ -30,6 +31,7 @@ describe("SessionDetail", () => {
             basePrice: 50000,
           }),
       })
+      .mockResolvedValueOnce({ json: () => Promise.resolve([]) })
       .mockResolvedValueOnce({ json: () => Promise.resolve([]) });
 
     render(<SessionDetail sessionId="s-1" />);
@@ -53,6 +55,7 @@ describe("SessionDetail", () => {
             basePrice: 50000,
           }),
       })
+      .mockResolvedValueOnce({ json: () => Promise.resolve([]) })
       .mockResolvedValueOnce({ json: () => Promise.resolve([]) });
 
     render(<SessionDetail sessionId="s-1" />);
@@ -75,6 +78,7 @@ describe("SessionDetail", () => {
             basePrice: 50000,
           }),
       })
+      .mockResolvedValueOnce({ json: () => Promise.resolve([]) })
       .mockResolvedValueOnce({ json: () => Promise.resolve([]) })
       .mockResolvedValueOnce({ json: () => Promise.resolve({ status: "active" }) });
 
@@ -116,7 +120,8 @@ describe("SessionDetail", () => {
               exportUrl: null,
             },
           ]),
-      });
+      })
+      .mockResolvedValueOnce({ json: () => Promise.resolve([]) });
 
     render(<SessionDetail sessionId="s-1" />);
 
@@ -145,12 +150,13 @@ describe("SessionDetail", () => {
             {
               id: "comp-1",
               frameId: "f-1",
-              status: "draft",
+              status: "review",
               previewUrl: null,
               exportUrl: null,
             },
           ]),
-      });
+      })
+      .mockResolvedValueOnce({ json: () => Promise.resolve([]) });
 
     render(<SessionDetail sessionId="s-1" />);
 
@@ -183,7 +189,8 @@ describe("SessionDetail", () => {
               exportUrl: "/uploads/exports/export.png",
             },
           ]),
-      });
+      })
+      .mockResolvedValueOnce({ json: () => Promise.resolve([]) });
 
     render(<SessionDetail sessionId="s-1" />);
 

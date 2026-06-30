@@ -12,6 +12,39 @@
   --color-cacao: #8B6914;
   --color-golden-haze: rgba(212, 135, 43, 0.08);
   --color-cream-card: #FEFAF3;
+
+  /* Semantic colors */
+  --bg-primary: var(--color-cream);
+  --bg-secondary: var(--color-cream-card);
+  --bg-tertiary: var(--color-warm-paper);
+  --text-primary: var(--color-espresso);
+  --text-secondary: var(--color-mahogany);
+  --text-muted: rgba(92, 45, 26, 0.5);
+  --border-color: rgba(212, 135, 43, 0.1);
+  --border-hover: rgba(212, 135, 43, 0.2);
+}
+
+/* Dark mode */
+.dark {
+  --color-cream: #1a1a1a;
+  --color-espresso: #f5f0e8;
+  --color-amber: #D4872B;
+  --color-amber-glow: #F5A623;
+  --color-mahogany: #c9a87c;
+  --color-warm-paper: #252525;
+  --color-cacao: #a69050;
+  --color-golden-haze: rgba(212, 135, 43, 0.15);
+  --color-cream-card: #232323;
+
+  /* Dark mode semantic colors */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #232323;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: #f5f0e8;
+  --text-secondary: #c9a87c;
+  --text-muted: rgba(245, 240, 232, 0.5);
+  --border-color: rgba(212, 135, 43, 0.15);
+  --border-hover: rgba(212, 135, 43, 0.3);
 }
 
 @theme inline {
@@ -28,9 +61,39 @@
 
 body {
   font-family: var(--font-sans);
-  background: var(--color-cream);
-  color: var(--color-espresso);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark mode specific overrides */
+.dark body {
+  background: #1a1a1a;
+}
+
+.dark .bg-cream {
+  background-color: #232323 !important;
+}
+
+.dark .bg-cream-card {
+  background-color: #1f1f1f !important;
+}
+
+.dark .text-espresso {
+  color: #f5f0e8 !important;
+}
+
+.dark .text-mahogany {
+  color: #c9a87c !important;
+}
+
+.dark .border-amber\/5 {
+  border-color: rgba(212, 135, 43, 0.15) !important;
+}
+
+.dark .border-amber\/10 {
+  border-color: rgba(212, 135, 43, 0.2) !important;
 }
 
 /* Warm grain texture on dark surfaces */
@@ -46,6 +109,16 @@ body {
 /* Film strip perforation on card edges */
 .film-strip {
   position: relative;
+}
+
+.dark .film-strip::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 12px,
+    #2d2d2d 12px,
+    #2d2d2d 16px
+  );
 }
 
 .film-strip::after {
@@ -80,6 +153,7 @@ body {
   border: none;
 }
 
+/* Animations */
 @keyframes bounce-in {
   0% { transform: scale(0.3); opacity: 0.3; }
   50% { transform: scale(1.2); }
@@ -103,8 +177,35 @@ body {
   100% { transform: rotate(360deg) scale(1); }
 }
 
+@keyframes slide-in-right {
+  0% { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(212, 135, 43, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(212, 135, 43, 0.4); }
+}
+
 .animate-bounce-in {
   animation: bounce-in 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 .checkmark-path {
@@ -122,4 +223,35 @@ body {
 
 .group:hover .hover-spin {
   transform: rotate(15deg) scale(1.1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 2px;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(212, 135, 43, 0.3);
+  color: var(--text-primary);
 }

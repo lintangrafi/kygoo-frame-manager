@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { PinGate } from "@/components/session/PinGate";
 import { CustomerDashboard } from "@/components/session/CustomerDashboard";
@@ -13,6 +13,8 @@ interface SessionInfo {
   customerName: string;
   status: string;
   photoCount: number;
+  basePrice?: number;
+  extraFrameFee?: number;
 }
 
 export default function SessionPageClient() {
@@ -43,7 +45,15 @@ export default function SessionPageClient() {
         >
           ← Kembali
         </button>
-        <Gallery sessionId={session.sessionId} slug={slug} status={session.status} />
+        <Gallery
+          sessionId={session.sessionId}
+          slug={slug}
+          status={session.status}
+          pricing={{
+            basePrice: session.basePrice || 0,
+            extraFrameFee: session.extraFrameFee || 0,
+          }}
+        />
       </div>
     );
   }

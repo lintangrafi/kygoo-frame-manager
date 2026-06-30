@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { compositions, sessions, frames } from "@/db/schema";
+import { compositions } from "@/db/schema";
 import { getStaffSession } from "@/lib/auth/get-session";
 
+// Staff approves composition (moves to approved status)
+// Status: review -> approved
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const staff = await getStaffSession();
   if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,21 +15,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const [comp] = await db.select().from(compositions).where(eq(compositions.id, compId)).limit(1);
   if (!comp) return NextResponse.json({ error: "Composition tidak ditemukan" }, { status: 404 });
 
-  await db.update(compositions).set({ status: "finalized" }).where(eq(compositions.id, compId));
-
-  const comps = await db.select({
-    frameId: compositions.frameId,
-  }).from(compositions).where(eq(compositions.sessionId, comp.sessionId));
-
-  let totalFee = 0;
-  for (const c of comps) {
-    if (c.frameId) {
-      const [frame] = await db.select({ fee: frames.additionalFee }).from(frames).where(eq(frames.id, c.frameId)).limit(1);
-      if (frame && frame.fee) totalFee += frame.fee;
-    }
+  // Only allow review compositions to be approved
+  if (comp.status !== "review") {
+    return NextResponse.json({ error: `Tidak bisa approve - status saat ini: ${comp.status}` }, { status: 400 });
   }
 
-  await db.update(sessions).set({ extraFrameFee: totalFee }).where(eq(sessions.id, comp.sessionId));
+  await db.update(compositions).set({ status: "approved" }).where(eq(compositions.id, compId));
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, status: "approved" });
 }

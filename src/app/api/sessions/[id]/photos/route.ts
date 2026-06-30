@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { photos } from "@/db/schema";
+import { photos, allocations } from "@/db/schema";
 import { getStaffSession } from "@/lib/auth/get-session";
 import { saveFile, resolveExistingUploadPath } from "@/lib/upload";
 
@@ -24,10 +24,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ id: photoId, fileUrl: url, originalName: file.name, fileExists: true, recovered: true });
   }
 
+  // Get current max orderIndex
+  const existingPhotos = await db.select().from(photos).where(eq(photos.sessionId, sessionId));
+  const maxOrder = existingPhotos.reduce((max, p) => Math.max(max, p.orderIndex || 0), 0);
+
   const [photo] = await db.insert(photos).values({
     sessionId,
     fileUrl: url,
     originalName: file.name,
+    orderIndex: maxOrder + 1,
   }).returning();
 
   return NextResponse.json({ ...photo, fileExists: true });
@@ -53,4 +58,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   );
 
   return NextResponse.json(enriched);
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const staff = await getStaffSession();
+  if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id: sessionId } = await params;
+  const url = new URL(req.url);
+  const photoId = url.searchParams.get("photoId");
+
+  if (!photoId) {
+    return NextResponse.json({ error: "photoId diperlukan" }, { status: 400 });
+  }
+
+  // Verify photo belongs to this session
+  const [photo] = await db.select().from(photos).where(eq(photos.id, photoId)).limit(1);
+
+  if (!photo) {
+    return NextResponse.json({ error: "Foto tidak ditemukan" }, { status: 404 });
+  }
+
+  if (photo.sessionId !== sessionId) {
+    return NextResponse.json({ error: "Foto tidak milik sesi ini" }, { status: 400 });
+  }
+
+  // Remove photo from any allocations that reference it
+  await db.update(allocations).set({ photoId: null }).where(eq(allocations.photoId, photoId));
+
+  // Delete the photo
+  await db.delete(photos).where(eq(photos.id, photoId));
+
+  return NextResponse.json({ success: true });
 }

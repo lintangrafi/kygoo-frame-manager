@@ -56,13 +56,13 @@ export function CustomerDashboard({ customerName, sessionId, slug, status, photo
                 {photoCount}
               </div>
               <div className="text-xs text-mahogany/40 font-medium mt-1">
-                Foto RAW
+                Foto
               </div>
             </div>
             <div className="bg-cream rounded-2xl p-5 border border-amber/5">
               <Image className="w-6 h-6 text-amber mb-2 mx-auto" />
               <div className="font-display text-3xl font-black text-espresso">
-                {status === "completed" ? "✓" : "∞"}
+                {status === "completed" ? "✓" : status === "active" ? "3" : "0"}
               </div>
               <div className="text-xs text-mahogany/40 font-medium mt-1">
                 Frame Tersedia

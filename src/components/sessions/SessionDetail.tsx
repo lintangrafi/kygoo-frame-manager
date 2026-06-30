@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { CheckCircle, Download, Clock, Hash, Sparkles, Upload, Image } from "lucide-react";
+import { CheckCircle, Download, Clock, Hash, Sparkles, Upload, Image, Trash2, Eye } from "lucide-react";
 
 interface Session {
   id: string;
@@ -10,6 +10,13 @@ interface Session {
   customerName: string;
   status: string;
   basePrice: number;
+}
+
+interface Photo {
+  id: string;
+  fileUrl: string;
+  originalName: string;
+  fileExists: boolean;
 }
 
 interface Composition {
@@ -23,24 +30,30 @@ interface Composition {
 export function SessionDetail({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<Session | null>(null);
   const [compositions, setCompositions] = useState<Composition[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
   const [justApproved, setJustApproved] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [deletingPhoto, setDeletingPhoto] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<Photo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = () => {
     Promise.all([
       fetch(`/api/sessions/${sessionId}`).then(r => r.json()),
       fetch(`/api/sessions/${sessionId}/compositions`).then(r => r.json()),
-    ]).then(([s, c]) => {
+      fetch(`/api/sessions/${sessionId}/photos`).then(r => r.json()),
+    ]).then(([s, c, p]) => {
       setSession(s && !s.error ? s : null);
       setCompositions(Array.isArray(c) ? c : []);
+      setPhotos(Array.isArray(p) ? p : []);
       setLoading(false);
     }).catch(() => {
       setSession(null);
       setCompositions([]);
+      setPhotos([]);
       setLoading(false);
     });
   };
@@ -84,13 +97,38 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
     setSession(prev => prev ? { ...prev, status: "active" } : null);
   }
 
+  async function deletePhoto(photoId: string) {
+    if (!confirm("Hapus foto ini? Tindakan ini tidak bisa dibatalkan.")) return;
+
+    setDeletingPhoto(photoId);
+    await fetch(`/api/sessions/${sessionId}/photos?photoId=${photoId}`, {
+      method: "DELETE",
+    });
+    setDeletingPhoto(null);
+    setPhotos(prev => prev.filter(p => p.id !== photoId));
+  }
+
   async function approve(compId: string) {
     setApproving(compId);
     await fetch(`/api/compositions/${compId}/approve`, { method: "POST" });
+    setCompositions(prev => prev.map(c => c.id === compId ? { ...c, status: "approved" } : c));
+    setApproving(null);
+    setJustApproved(compId);
+    setTimeout(() => setJustApproved(null), 2000);
+  }
+
+  async function finalize(compId: string) {
+    setApproving(compId);
+    await fetch(`/api/compositions/${compId}/finalize`, { method: "POST" });
     setCompositions(prev => prev.map(c => c.id === compId ? { ...c, status: "finalized" } : c));
     setApproving(null);
     setJustApproved(compId);
     setTimeout(() => setJustApproved(null), 2000);
+  }
+
+  // Handle approve button - calls the approve endpoint (review -> approved)
+  async function handleApprove(compId: string) {
+    await approve(compId);
   }
 
   if (loading) {
@@ -189,7 +227,14 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         {compositions.map(comp => {
           const isJustApproved = justApproved === comp.id;
           const isApproving = approving === comp.id;
-          const isFinal = comp.status === "finalized" || isJustApproved;
+
+          const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+            draft: { label: "Draft", color: "text-cacao", bg: "bg-cacao/10" },
+            review: { label: "Menunggu Review", color: "text-amber", bg: "bg-amber/10" },
+            approved: { label: "Disetujui", color: "text-green-600", bg: "bg-green-50" },
+            finalized: { label: "Final", color: "text-mahogany", bg: "bg-mahogany/10" },
+          };
+          const status = statusConfig[comp.status] || statusConfig.draft;
 
           return (
             <div
@@ -214,12 +259,8 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
                   <div className="text-sm font-bold text-espresso font-mono tracking-tight">
                     {comp.id.slice(0, 12)}
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors duration-500 ${
-                    isFinal
-                      ? "bg-mahogany/10 text-mahogany"
-                      : "bg-amber/10 text-amber"
-                  }`}>
-                    {isJustApproved ? "Disetujui!" : isFinal ? "Final" : "Review"}
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors duration-500 ${status.bg} ${status.color}`}>
+                    {isJustApproved ? "Disetujui!" : status.label}
                   </span>
                 </div>
               </div>
@@ -234,15 +275,36 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
                     Unduh
                   </a>
                 )}
-                {comp.status !== "finalized" && !isJustApproved && (
+                {/* Show Finalize button for approved compositions */}
+                {comp.status === "approved" && (
                   <button
-                    onClick={() => approve(comp.id)}
+                    onClick={() => finalize(comp.id)}
                     disabled={isApproving}
                     className="inline-flex items-center gap-2 bg-espresso text-cream px-4 py-2 rounded-xl text-xs font-bold hover:bg-mahogany active:scale-[0.97] transition-all duration-200 disabled:opacity-50"
                   >
                     {isApproving ? (
                       <>
                         <span className="w-3.5 h-3.5 border-2 border-cream/40 border-t-cream rounded-full animate-spin" />
+                        Memfinalisasi
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Finalisasi
+                      </>
+                    )}
+                  </button>
+                )}
+                {/* Show Approve button for review compositions */}
+                {comp.status === "review" && (
+                  <button
+                    onClick={() => handleApprove(comp.id)}
+                    disabled={isApproving}
+                    className="inline-flex items-center gap-2 bg-amber text-espresso px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-glow active:scale-[0.97] transition-all duration-200 disabled:opacity-50"
+                  >
+                    {isApproving ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-espresso/40 border-t-espresso rounded-full animate-spin" />
                         Menyetujui
                       </>
                     ) : (
@@ -275,6 +337,84 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
           </div>
         )}
       </div>
+
+      {/* Photos Section */}
+      <h3 className="font-display text-2xl font-black italic text-espresso mb-4 mt-8">Foto Pelanggan</h3>
+      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-8">
+        {photos.map(photo => (
+          <div
+            key={photo.id}
+            className="relative group film-strip bg-cream-card rounded-xl overflow-hidden border border-amber/5 shadow-sm hover:shadow-md hover:shadow-amber/5 transition-all duration-200"
+          >
+            <div className="aspect-square relative">
+              {photo.fileExists ? (
+                <img
+                  src={photo.fileUrl || ""}
+                  alt={photo.originalName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-red-50 text-red-300">
+                  <span className="text-xs">File hilang</span>
+                </div>
+              )}
+              {/* Hover overlay with actions */}
+              <div className="absolute inset-0 bg-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setPreviewPhoto(photo)}
+                  className="p-2 bg-cream rounded-lg hover:bg-amber transition-colors"
+                  title="Preview"
+                >
+                  <Eye className="w-4 h-4 text-espresso" />
+                </button>
+                <button
+                  onClick={() => deletePhoto(photo.id)}
+                  disabled={deletingPhoto === photo.id}
+                  className="p-2 bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
+                  title="Hapus"
+                >
+                  {deletingPhoto === photo.id ? (
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 text-white" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="p-2 text-xs text-mahogany/40 truncate">
+              {photo.originalName}
+            </div>
+          </div>
+        ))}
+        {photos.length === 0 && (
+          <div className="col-span-full text-center py-8 bg-cream-card rounded-xl border border-amber/5">
+            <Image className="w-8 h-8 text-mahogany/10 mx-auto mb-2" />
+            <p className="text-mahogany/30 text-sm">Belum ada foto</p>
+          </div>
+        )}
+      </div>
+
+      {/* Photo Preview Modal */}
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 bg-espresso/80 z-50 flex items-center justify-center p-8"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div className="relative max-w-4xl max-h-full">
+            <button
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-10 right-0 text-cream hover:text-amber transition-colors"
+            >
+              Tutup
+            </button>
+            <img
+              src={previewPhoto.fileUrl || ""}
+              alt={previewPhoto.originalName}
+              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

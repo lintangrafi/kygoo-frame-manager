@@ -13,6 +13,8 @@
     "db:seed-slots": "npx tsx src/db/seed-slots.ts"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.1",
+    "@tanstack/react-virtual": "^3.14.3",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -24,7 +26,8 @@
     "react-dom": "19.2.4",
     "sharp": "^0.35.1",
     "tailwind-merge": "^3.6.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
