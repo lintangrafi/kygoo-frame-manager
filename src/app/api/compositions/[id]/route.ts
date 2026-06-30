@@ -45,9 +45,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await db.update(compositions).set({ status: body.status }).where(eq(compositions.id, compId));
   }
 
+  const savedAllocs: any[] = [];
+
   if (body.allocations && Array.isArray(body.allocations)) {
     for (const alloc of body.allocations) {
-      await db.update(allocations).set({
+      const values = {
+        compositionId: compId,
+        slotId: alloc.slotId,
         photoId: alloc.photoId || null,
         scale: String(alloc.scale ?? 1),
         offsetX: String(alloc.offsetX ?? 0),
@@ -61,12 +65,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         cropY: alloc.cropY !== undefined ? String(alloc.cropY) : null,
         cropWidth: alloc.cropWidth !== undefined ? String(alloc.cropWidth) : null,
         cropHeight: alloc.cropHeight !== undefined ? String(alloc.cropHeight) : null,
-      }).where(eq(allocations.id, alloc.id));
+      };
+
+      // Alloc id "temp-*" = belum ada di DB, INSERT baru
+      if (typeof alloc.id === "string" && alloc.id.startsWith("temp-")) {
+        const [inserted] = await db.insert(allocations).values(values).returning();
+        savedAllocs.push(inserted);
+      } else {
+        // Alloc dengan id asli dari DB = UPDATE
+        await db.update(allocations).set(values).where(eq(allocations.id, alloc.id));
+        savedAllocs.push({ id: alloc.id, ...values });
+      }
     }
   }
 
   const [updated] = await db.select().from(compositions).where(eq(compositions.id, compId)).limit(1);
-  return NextResponse.json(updated);
+
+  // Kirim balik savedAllocs agar frontend bisa ganti temp-ids dengan real ids
+  return NextResponse.json({ ...updated, _savedAllocations: savedAllocs });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -19,20 +19,23 @@ const nextConfig: NextConfig = {
     unoptimized: false,
   },
 
-  // Headers for static assets
+  // Headers for static assets & rewrites
   async headers() {
     return [
-      {
-        source: "/uploads/:path*",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
-      },
       {
         source: "/_next/static/:path*",
         headers: [
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],
+      },
+    ];
+  },
+
+  async rewrites() {
+    return [
+      {
+        source: "/uploads/:path*",
+        destination: "/api/uploads/:path*",
       },
     ];
   },
